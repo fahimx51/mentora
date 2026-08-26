@@ -17,6 +17,16 @@
     "description": {
       "type": "text"
     },
+    "thumbnail": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
     "instructor": {
       "type": "relation",
       "relation": "manyToOne",
@@ -27,6 +37,18 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::lesson.lesson",
+      "mappedBy": "course"
+    },
+    "quizzes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quiz.quiz",
+      "mappedBy": "course"
+    },
+    "enrollments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::enrollment.enrollment",
       "mappedBy": "course"
     }
   }

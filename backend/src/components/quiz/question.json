@@ -1,0 +1,32 @@
+{
+  "collectionName": "components_quiz_questions",
+  "info": {
+    "displayName": "question",
+    "icon": "question"
+  },
+  "options": {},
+  "attributes": {
+    "question": {
+      "type": "string"
+    },
+    "optionA": {
+      "type": "string"
+    },
+    "optionB": {
+      "type": "string"
+    },
+    "optionC": {
+      "type": "string"
+    },
+    "optionD": {
+      "type": "string"
+    },
+    "correctOption": {
+      "type": "enumeration",
+      "enum": [
+        "A, B, C, D"
+      ]
+    }
+  },
+  "config": {}
+}

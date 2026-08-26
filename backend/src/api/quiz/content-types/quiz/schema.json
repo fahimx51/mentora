@@ -11,26 +11,25 @@
   },
   "pluginOptions": {},
   "attributes": {
-    "questionText": {
+    "title": {
       "type": "string"
     },
-    "optionA": {
-      "type": "string"
+    "course": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::course.course",
+      "inversedBy": "quizzes"
     },
-    "optionB": {
-      "type": "string"
+    "questions": {
+      "type": "component",
+      "component": "quiz.question",
+      "repeatable": true
     },
-    "optionC": {
-      "type": "string"
-    },
-    "optionD": {
-      "type": "string"
-    },
-    "correctOption": {
-      "type": "enumeration",
-      "enum": [
-        "A, B, C, D"
-      ]
+    "quiz_results": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quiz-result.quiz-result",
+      "mappedBy": "quiz"
     }
   }
 }
