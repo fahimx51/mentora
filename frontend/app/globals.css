@@ -1,2 +1,37 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* 🎨 GLOBAL PRIMARY COLOR (Change this to update whole app) */
+  --primary-color: #8b5cf6;
+  /* Main Purple */
+  --primary-hover: #7c3aed;
+  /* Darker Purple for Light Mode hover */
+  --primary-light: #f5f3ff;
+  /* Very soft Purple background */
+
+  /* DaisyUI HSL format sync */
+  --p: 263 90% 66%;
+}
+
+.dark {
+  /* 🎨 GLOBAL PRIMARY DARK MODE COLOR */
+  --primary-color: #a78bfa;
+  /* Lighter Purple for Dark Mode */
+  --primary-hover: #9333ea;
+  /* Hover for Dark Mode */
+  --primary-light: rgba(139, 92, 246, 0.15);
+  /* Soft transparent background */
+
+  /* DaisyUI HSL dark sync */
+  --p: 263 91% 73%;
+}
+
+/* Map CSS Variables to Tailwind v4 Theme Utilities */
+@theme {
+  --color-primary: var(--primary-color);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+}
