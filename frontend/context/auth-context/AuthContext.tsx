@@ -1,21 +1,30 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMeApi } from '@/lib/api';
 import Cookies from 'js-cookie';
+
+interface Role {
+    id: number;
+    name: string;
+    type: string;
+}
 
 interface User {
     id: number;
     username: string;
     email: string;
+    role?: Role;
 }
 
 interface AuthContextType {
     user: User | null;
     setUser: (user: User | null) => void;
-    token: string | null;
-    setToken: (token: string | null) => void;
+    accessToken: string | null;
+    refreshToken: string | null;
+    setAccessToken: (token: string | null) => void;
+    setRefreshToken: (token: string | null) => void;
     isLoading: boolean;
     logout: () => void;
 }
@@ -23,44 +32,53 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [token, setToken] = useState<string | null>(null);
+    const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const router = useRouter();
 
-    const logout = () => {
+    const logout = useCallback(() => {
         Cookies.remove('jwt', { path: '/' });
-        setToken(null);
+        Cookies.remove('refreshToken', { path: '/' });
+        setAccessToken(null);
+        setRefreshToken(null);
         setUser(null);
         setIsLoading(false);
         router.push('/login');
-    };
+    }, [router]);
 
     useEffect(() => {
-        const savedToken = Cookies.get('jwt');
+        const savedAccessToken = Cookies.get('jwt');
+        const savedRefreshToken = Cookies.get('refreshToken');
 
-        if (!savedToken) {
-            // Defer state update outside synchronous effect body to avoid cascading render warning
-            queueMicrotask(() => {
-                setIsLoading(false);
-            });
+        // Allow mount check if either access token OR refresh token exists
+        if (!savedAccessToken && !savedRefreshToken) {
+            setIsLoading(false);
             return;
         }
 
         let isMounted = true;
 
-        // Defer initial token update to prevent synchronous setState lint warning
-        queueMicrotask(() => {
-            if (isMounted) setToken(savedToken);
-        });
+        if (savedAccessToken) setAccessToken(savedAccessToken);
+        if (savedRefreshToken) setRefreshToken(savedRefreshToken);
 
         getMeApi()
             .then((userData) => {
-                if (isMounted) setUser(userData);
+                if (isMounted) {
+                    setUser(userData);
+                    // Sync updated tokens from cookies if interceptor refreshed them
+                    const freshJwt = Cookies.get('jwt');
+                    if (freshJwt) setAccessToken(freshJwt);
+                }
             })
-            .catch(() => {
-                if (isMounted) logout();
+            .catch((err) => {
+                if (!isMounted) return;
+                // ONLY trigger logout if backend explicitly rejects session (401/403)
+                if (err?.response?.status === 401 || err?.response?.status === 403) {
+                    logout();
+                }
             })
             .finally(() => {
                 if (isMounted) setIsLoading(false);
@@ -69,10 +87,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [logout]);
 
     return (
-        <AuthContext.Provider value={{ user, setUser, token, setToken, isLoading, logout }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                setUser,
+                accessToken,
+                refreshToken,
+                setAccessToken,
+                setRefreshToken,
+                isLoading,
+                logout,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

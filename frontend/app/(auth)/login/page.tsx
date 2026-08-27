@@ -2,24 +2,62 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import Cookies from 'js-cookie';
 import Logo from '@/components/shared/Logo';
+import { getMeApi, loginUserApi } from '@/lib/api';
+import { useAuth } from '@/context/auth-context/AuthContext';
 
 export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
     const [formData, setFormData] = useState({
-        identifier: '', // Can be email or username for Strapi
+        identifier: '',
         password: '',
     });
+
+    const router = useRouter();
+    const { setAccessToken, setRefreshToken, setUser } = useAuth();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Handle login submission with Strapi API here
-        console.log('Logging in user:', formData);
+        setError('');
+        setIsLoading(true);
+
+        try {
+            const result = await loginUserApi(formData);
+            console.log(result);
+
+            // 1. Save tokens to cookies
+            Cookies.set('jwt', result.jwt, { expires: 7, path: '/', sameSite: 'lax' });
+            Cookies.set('refreshToken', result.refreshToken, { expires: 30, path: '/', sameSite: 'lax' });
+
+            // 2. Update React Context state
+            setAccessToken(result.jwt);
+            setRefreshToken(result.refreshToken);
+            
+            const fullUserData = await getMeApi();
+            setUser(fullUserData);
+            // console.log("full user",fullUserData);
+
+            // 3. Redirect home
+            router.push('/');
+
+        } catch (err: unknown) {
+            console.error('Login failed:', err);
+            setError(
+                (err as { response?: { data?: { error?: { message?: string } } } })
+                    .response?.data?.error?.message || 'Login failed. Please check your credentials.'
+            );
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -38,6 +76,14 @@ export default function LoginPage() {
 
             {/* Form Card */}
             <div className="w-full max-w-md p-8 bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 transition-colors duration-200">
+
+                {/* Error Alert */}
+                {error && (
+                    <div className="mb-5 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 text-sm text-center">
+                        {error}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-5">
 
                     {/* Email / Username Input */}
@@ -101,10 +147,17 @@ export default function LoginPage() {
                     {/* Submit Button */}
                     <button
                         type="submit"
-                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/30 active:scale-[0.99] transition-all duration-200 text-sm cursor-pointer mt-2"
+                        disabled={isLoading}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/30 active:scale-[0.99] transition-all duration-200 text-sm cursor-pointer mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <span>Sign In</span>
-                        <ArrowRight className="h-4 w-4" />
+                        {isLoading ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                            <>
+                                <span>Sign In</span>
+                                <ArrowRight className="h-4 w-4" />
+                            </>
+                        )}
                     </button>
                 </form>
 

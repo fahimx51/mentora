@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { User, Mail, Lock, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Logo from '@/components/shared/Logo';
-import { registerUserApi } from '@/lib/api';
+import { getMeApi, registerUserApi } from '@/lib/api';
 import { useAuth } from '@/context/auth-context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
@@ -20,7 +20,7 @@ export default function RegisterPage() {
     });
 
     const router = useRouter();
-    const { setToken, setUser } = useAuth();
+    const { setAccessToken, setRefreshToken, setUser } = useAuth();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -34,14 +34,18 @@ export default function RegisterPage() {
         try {
             const result = await registerUserApi(formData);
 
-            // 1. Save JWT to cookie
+            // 1. Save tokens to cookies
             Cookies.set('jwt', result.jwt, { expires: 7, path: '/', sameSite: 'lax' });
+            Cookies.set('refreshToken', result.refreshToken, { expires: 30, path: '/', sameSite: 'lax' });
 
             // 2. Update React Context state
-            setToken(result.jwt);
-            setUser(result.user);
+            setAccessToken(result.jwt);
+            setRefreshToken(result.refreshToken);
+            
+            const fullUserData = await getMeApi();
+            setUser(fullUserData);
 
-            // 3. Navigate home
+            // 3. Redirect home
             router.push('/');
         } catch (err: unknown) {
             console.error('Registration failed:', err);
