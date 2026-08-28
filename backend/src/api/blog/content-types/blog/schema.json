@@ -12,26 +12,32 @@
   "pluginOptions": {},
   "attributes": {
     "title": {
-      "type": "string"
-    },
-    "body": {
-      "type": "blocks"
-    },
-    "coverImage": {
-      "type": "media",
-      "multiple": false,
-      "allowedTypes": [
-        "images",
-        "files",
-        "videos",
-        "audios"
-      ]
+      "type": "string",
+      "required": true
     },
     "author": {
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user",
+      "required": true,
       "inversedBy": "blogs"
+    },
+    "coverImage": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "richtext",
+      "required": true
+    },
+    "blog_status": {
+      "type": "enumeration",
+      "required": true,
+      "default": "draft",
+      "enum": [
+        "published",
+        "draft"
+      ]
     }
   }
 }

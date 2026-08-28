@@ -19,6 +19,7 @@ import {
     Save,
     Video,
     Lock,
+    Users,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
@@ -353,7 +354,13 @@ export default function SingleCourseAdminPage() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                            href={`/dashboard/courses/${courseDocId}/progress`}
+                            className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 text-xs sm:text-sm font-semibold transition-all inline-flex items-center gap-1.5 shadow-sm"
+                        >
+                            <Users className="w-4 h-4" /> Student Progress
+                        </Link>
                         <Link
                             href={`/dashboard/courses/edit/${courseDocId}`}
                             className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-semibold transition-all inline-flex items-center gap-1.5 shadow-sm"

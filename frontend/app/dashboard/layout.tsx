@@ -127,7 +127,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             }`}
                                     >
                                         <Icon size={20} className="shrink-0" />
-                                        {/* Label text hidden on mobile/tablet (<1024px) */}
                                         <span className="hidden lg:inline truncate">{item.label}</span>
                                     </Link>
                                 </li>
@@ -136,7 +135,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </ul>
                 </nav>
 
-                {/* Bottom Tools (Home & Dark Mode for mobile view) */}
+                {/* Bottom Tools */}
                 <div className="p-2 sm:p-3 border-t border-slate-200/80 dark:border-slate-800 flex flex-col items-center lg:flex-row lg:justify-between gap-2">
                     <Link
                         href="/"
@@ -154,7 +153,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Main Content Area */}
             <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <div className="">
+                <div>
                     {children}
                 </div>
             </main>

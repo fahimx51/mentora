@@ -14,7 +14,8 @@
     "student": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "plugin::users-permissions.user"
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "lessonProgresses"
     },
     "lesson": {
       "type": "relation",
