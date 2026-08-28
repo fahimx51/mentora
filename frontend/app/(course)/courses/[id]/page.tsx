@@ -40,7 +40,7 @@ export default function CourseDetailsPage() {
     const params = useParams();
     const router = useRouter();
     const courseId = params?.id as string;
-    const { user, isAuthenticated } = useAuth();
+    const { user } = useAuth();
 
     const [course, setCourse] = useState<Course | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -56,10 +56,10 @@ export default function CourseDetailsPage() {
     }, [courseId]);
 
     useEffect(() => {
-        if (isAuthenticated && user && course) {
+        if (user && course) {
             checkUserEnrollment();
         }
-    }, [isAuthenticated, user, course]);
+    }, [user, course]);
 
     const fetchCourseDetails = async () => {
         try {
@@ -110,10 +110,17 @@ export default function CourseDetailsPage() {
 
     const checkUserEnrollment = async () => {
         try {
-            const targetId = course?.documentId || course?.id;
-            const res = await api.get(
-                `/enrollments?filters[user][id][$eq]=${user?.id}&filters[course][id][$eq]=${targetId}`
-            );
+            const courseTarget = course?.documentId || course?.id;
+
+            if (!courseTarget) return;
+
+            // Only filter by course; Strapi handles user scope automatically via token
+            const res = await api.get('/enrollments', {
+                params: {
+                    'filters[course][documentId][$eq]': courseTarget,
+                },
+            });
+
             const enrollments = res.data?.data || res.data || [];
             if (enrollments.length > 0) {
                 setIsAlreadyEnrolled(true);
@@ -124,7 +131,7 @@ export default function CourseDetailsPage() {
     };
 
     const handleEnroll = async () => {
-        if (!isAuthenticated) {
+        if (!user) {
             router.push('/login');
             return;
         }
@@ -134,10 +141,12 @@ export default function CourseDetailsPage() {
             setError('');
             setSuccessMsg('');
 
+            const courseTarget = course?.documentId || course?.id;
+
+            // Send relation payload to enroll
             await api.post('/enrollments', {
                 data: {
-                    user: user?.id,
-                    course: course?.documentId || course?.id,
+                    course: courseTarget,
                 },
             });
 
@@ -152,16 +161,15 @@ export default function CourseDetailsPage() {
     };
 
     const handleGoToCourse = () => {
-        router.push(`/dashboard/courses/${courseId}`);
+        const targetId = course?.documentId || courseId;
+        router.push(`/dashboard/my-courses/${targetId}`);
     };
 
-    // Determine user role and access rights
     const userRole = user?.role?.name?.toLowerCase() || user?.role?.type?.toLowerCase() || '';
     const isAdmin = userRole.includes('admin');
     const isContentManager = userRole.includes('manager') || userRole.includes('content');
     const isInstructor = userRole.includes('instructor') || course?.instructor?.id === user?.id;
 
-    // Show "Go to Course" if Admin, Content Manager, Instructor, or Enrolled Student
     const hasFullAccess = isAdmin || isContentManager || isInstructor || isAlreadyEnrolled;
 
     const getImageUrl = () => {

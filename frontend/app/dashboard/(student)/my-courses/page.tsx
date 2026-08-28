@@ -11,6 +11,10 @@ interface LessonProgress {
     id: number;
     documentId?: string;
     isCompleted?: boolean;
+    lesson?: {
+        id?: number;
+        documentId?: string;
+    } | number | string;
     student?: {
         id: number;
         documentId?: string;
@@ -52,6 +56,7 @@ interface Course {
 export default function MyCoursesPage() {
     const { user } = useAuth();
     const [courses, setCourses] = useState<Course[]>([]);
+    const [userProgresses, setUserProgresses] = useState<LessonProgress[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string>('');
 
@@ -62,12 +67,31 @@ export default function MyCoursesPage() {
             try {
                 setIsLoading(true);
 
-                // Fetch enrollments and populate the course + thumbnail
+                // Fetch user enrollments and populate course details safely
                 const response = await api.get('/enrollments', {
                     params: {
-                        'populate[course][populate]': 'thumbnail',
+                        'populate[course][populate][thumbnail]': 'true',
+                        'populate[course][populate][instructor]': 'true',
+                        'populate[course][populate][lessons]': 'true',
+                        'populate[course][populate][quizzes]': 'true',
                     },
                 });
+
+                // Fetch lesson progress for current user to reliably track completed lessons
+                const progressResponse = await api.get('/lesson-progresses', {
+                    params: {
+                        'populate[lesson]': 'true',
+                        'filters[isCompleted][$eq]': 'true',
+                    },
+                });
+
+                const rawProgressList = Array.isArray(progressResponse?.data?.data)
+                    ? progressResponse.data.data
+                    : Array.isArray(progressResponse?.data)
+                        ? progressResponse.data
+                        : [];
+
+                setUserProgresses(rawProgressList);
 
                 const rawList = Array.isArray(response?.data?.data)
                     ? response.data.data
@@ -81,15 +105,29 @@ export default function MyCoursesPage() {
                         const courseData = item.course || item.attributes?.course?.data || item.attributes?.course;
                         if (!courseData) return null;
 
+                        const rawLessons = courseData.lessons || courseData.attributes?.lessons;
+                        const parsedLessons = Array.isArray(rawLessons?.data)
+                            ? rawLessons.data.map((l: any) => l.attributes || l)
+                            : Array.isArray(rawLessons)
+                                ? rawLessons
+                                : [];
+
+                        const rawQuizzes = courseData.quizzes || courseData.attributes?.quizzes;
+                        const parsedQuizzes = Array.isArray(rawQuizzes?.data)
+                            ? rawQuizzes.data.map((q: any) => q.attributes || q)
+                            : Array.isArray(rawQuizzes)
+                                ? rawQuizzes
+                                : [];
+
                         return {
                             id: courseData.id,
                             documentId: courseData.documentId || courseData.id,
                             title: courseData.title || courseData.attributes?.title || 'Untitled Course',
                             description: courseData.description || courseData.attributes?.description,
-                            thumbnail: courseData.thumbnail || courseData.attributes?.thumbnail,
-                            instructor: courseData.instructor || courseData.attributes?.instructor,
-                            lessons: courseData.lessons || courseData.attributes?.lessons,
-                            quizzes: courseData.quizzes || courseData.attributes?.quizzes,
+                            thumbnail: courseData.thumbnail?.data?.attributes || courseData.thumbnail || courseData.attributes?.thumbnail,
+                            instructor: courseData.instructor?.data?.attributes || courseData.instructor || courseData.attributes?.instructor,
+                            lessons: parsedLessons,
+                            quizzes: parsedQuizzes,
                         };
                     })
                     .filter((course: Course | null): course is Course => Boolean(course));
@@ -155,19 +193,16 @@ export default function MyCoursesPage() {
                         const totalLessons = lessons.length;
                         const totalQuizzes = course.quizzes?.length || 0;
 
+                        // Calculate completed lessons using the fetched progress items
                         const completedLessons = lessons.filter((lesson) => {
-                            const progressList = lesson.lesson_progresses || [];
-                            return progressList.some((p) => {
-                                if (!p.isCompleted) return false;
-
-                                const studentObj = typeof p.student === 'object' ? p.student : null;
-                                const studentId = studentObj?.id || (typeof p.student === 'number' ? p.student : null);
-                                const studentDocId = studentObj?.documentId || (typeof p.student === 'string' ? p.student : null);
+                            return userProgresses.some((prog) => {
+                                const progLessonObj = typeof prog.lesson === 'object' ? prog.lesson : null;
+                                const progLessonId = progLessonObj?.id || (typeof prog.lesson === 'number' ? prog.lesson : null);
+                                const progLessonDocId = progLessonObj?.documentId || (typeof prog.lesson === 'string' ? prog.lesson : null);
 
                                 return (
-                                    (studentId && String(studentId) === String(user?.id)) ||
-                                    (studentDocId && studentDocId === user?.documentId) ||
-                                    (!p.student && p.isCompleted)
+                                    (progLessonId && String(progLessonId) === String(lesson.id)) ||
+                                    (progLessonDocId && progLessonDocId === lesson.documentId)
                                 );
                             });
                         }).length;
