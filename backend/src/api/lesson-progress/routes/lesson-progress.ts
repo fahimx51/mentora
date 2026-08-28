@@ -1,7 +1,5 @@
-/**
- * lesson-progress router
- */
+'use strict';
 
-import { factories } from '@strapi/strapi';
+const { createCoreRouter } = require('@strapi/strapi').factories;
 
-export default factories.createCoreRouter('api::lesson-progress.lesson-progress');
+module.exports = createCoreRouter('api::lesson-progress.lesson-progress');

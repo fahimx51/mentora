@@ -7,7 +7,7 @@ export interface QuizQuestion extends Struct.ComponentSchema {
     icon: 'question';
   };
   attributes: {
-    correctOption: Schema.Attribute.Enumeration<['A, B, C, D']>;
+    correctOption: Schema.Attribute.Enumeration<['A', 'B', 'C', 'D']>;
     optionA: Schema.Attribute.String;
     optionB: Schema.Attribute.String;
     optionC: Schema.Attribute.String;

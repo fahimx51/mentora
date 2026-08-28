@@ -722,13 +722,13 @@ export interface ApiLessonProgressLessonProgress
     singularName: 'lesson-progress';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
-    completed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    isCompleted: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     lesson: Schema.Attribute.Relation<'manyToOne', 'api::lesson.lesson'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -1323,7 +1323,7 @@ export interface PluginUsersPermissionsUser
       'oneToMany',
       'api::enrollment.enrollment'
     >;
-    lesson_progresses: Schema.Attribute.Relation<
+    lessonProgresses: Schema.Attribute.Relation<
       'oneToMany',
       'api::lesson-progress.lesson-progress'
     >;

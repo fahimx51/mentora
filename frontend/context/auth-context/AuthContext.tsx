@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMeApi } from '@/lib/api';
 import Cookies from 'js-cookie';
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const router = useRouter();
 
-    const logout = useCallback(() => {
+    const logout = () => {
         Cookies.remove('jwt', { path: '/' });
         Cookies.remove('refreshToken', { path: '/' });
         setAccessToken(null);
@@ -47,38 +47,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setIsLoading(false);
         router.push('/login');
-    }, [router]);
+    };
 
     useEffect(() => {
         const savedAccessToken = Cookies.get('jwt');
         const savedRefreshToken = Cookies.get('refreshToken');
 
-        // Allow mount check if either access token OR refresh token exists
-        if (!savedAccessToken && !savedRefreshToken) {
+        if (!savedAccessToken) {
             setIsLoading(false);
             return;
         }
 
         let isMounted = true;
 
-        if (savedAccessToken) setAccessToken(savedAccessToken);
-        if (savedRefreshToken) setRefreshToken(savedRefreshToken);
+        setAccessToken(savedAccessToken);
+        if (savedRefreshToken) {
+            setRefreshToken(savedRefreshToken);
+        }
 
         getMeApi()
             .then((userData) => {
-                if (isMounted) {
-                    setUser(userData);
-                    // Sync updated tokens from cookies if interceptor refreshed them
-                    const freshJwt = Cookies.get('jwt');
-                    if (freshJwt) setAccessToken(freshJwt);
-                }
+                if (isMounted) setUser(userData);
             })
-            .catch((err) => {
-                if (!isMounted) return;
-                // ONLY trigger logout if backend explicitly rejects session (401/403)
-                if (err?.response?.status === 401 || err?.response?.status === 403) {
-                    logout();
-                }
+            .catch(() => {
+                if (isMounted) logout();
             })
             .finally(() => {
                 if (isMounted) setIsLoading(false);
@@ -87,7 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => {
             isMounted = false;
         };
-    }, [logout]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <AuthContext.Provider

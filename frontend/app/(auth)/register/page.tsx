@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { User, Mail, Lock, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import Cookies from 'js-cookie';
 import Logo from '@/components/shared/Logo';
 import { getMeApi, registerUserApi } from '@/lib/api';
 import { useAuth } from '@/context/auth-context/AuthContext';
-import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
 
 export default function RegisterPage() {
     const [showPassword, setShowPassword] = useState(false);
@@ -20,7 +20,7 @@ export default function RegisterPage() {
     });
 
     const router = useRouter();
-    const { setAccessToken, setRefreshToken, setUser } = useAuth();
+    const { setAccessToken, setUser } = useAuth();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -32,24 +32,37 @@ export default function RegisterPage() {
         setIsLoading(true);
 
         try {
-            const result = await registerUserApi(formData);
+            // Trim inputs before sending to server
+            const payload = {
+                username: formData.username.trim(),
+                email: formData.email.trim(),
+                password: formData.password,
+            };
 
-            // 1. Save tokens to cookies
-            Cookies.set('jwt', result.jwt, { expires: 7, path: '/', sameSite: 'lax' });
-            Cookies.set('refreshToken', result.refreshToken, { expires: 30, path: '/', sameSite: 'lax' });
+            const result = await registerUserApi(payload);
 
-            // 2. Update React Context state
-            setAccessToken(result.jwt);
-            setRefreshToken(result.refreshToken);
-            
+            // 1. Save JWT to cookies
+            if (result?.jwt) {
+                Cookies.set('jwt', result.jwt, { expires: 7, path: '/', sameSite: 'lax' });
+                setAccessToken(result.jwt);
+            }
+
+            // 2. Fetch user profile and update context
             const fullUserData = await getMeApi();
             setUser(fullUserData);
 
             // 3. Redirect home
             router.push('/');
-        } catch (err: unknown) {
+        } catch (err: any) {
             console.error('Registration failed:', err);
-            setError((err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message || 'Registration failed. Please try again.');
+
+            // Extract exact message from Strapi or generic fallback
+            const apiErrorMessage =
+                err?.response?.data?.error?.message ||
+                err?.message ||
+                'Registration failed. Please try again.';
+
+            setError(apiErrorMessage);
         } finally {
             setIsLoading(false);
         }
@@ -74,7 +87,7 @@ export default function RegisterPage() {
 
                 {/* Error Banner */}
                 {error && (
-                    <div className="mb-5 p-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 text-sm text-center">
+                    <div className="mb-5 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 text-sm text-center font-medium">
                         {error}
                     </div>
                 )}

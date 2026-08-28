@@ -10,105 +10,67 @@ export const api = axios.create({
     },
 });
 
+// Request Interceptor: Attach JWT to requests
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
-        const token = Cookies.get('jwt');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        const isAuthRoute = config.url?.includes('/auth/local');
+
+        if (!isAuthRoute) {
+            const token = Cookies.get('jwt');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+        } else {
+            delete config.headers.Authorization;
         }
     }
     return config;
 });
 
-let isRefreshing = false;
-let refreshQueue: ((token: string) => void)[] = [];
-
+// Response Interceptor: Handle 401 Unauthorized
 api.interceptors.response.use(
     (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
+    (error) => {
+        if (error.response?.status === 401) {
+            // Clear invalid session token
+            Cookies.remove('jwt', { path: '/' });
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-
-            const refreshToken = Cookies.get('refreshToken');
-
-            if (!refreshToken) {
-                Cookies.remove('jwt', { path: '/' });
-                Cookies.remove('refreshToken', { path: '/' });
-                if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-                    window.location.href = '/login';
-                }
-                return Promise.reject(error);
-            }
-
-            if (isRefreshing) {
-                return new Promise((resolve) => {
-                    refreshQueue.push((newToken: string) => {
-                        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                        resolve(api(originalRequest));
-                    });
-                });
-            }
-
-            isRefreshing = true;
-
-            try {
-                // Correct Strapi v5 plugin refresh route
-                const { data } = await axios.post(`${API_URL}/api/users-permissions/refresh`, {
-                    refreshToken,
-                });
-
-                const newJwt = data.jwt || data.token;
-                const newRefreshToken = data.refreshToken;
-
-                Cookies.set('jwt', newJwt, { expires: 7, path: '/', sameSite: 'lax' });
-                if (newRefreshToken) {
-                    Cookies.set('refreshToken', newRefreshToken, { expires: 30, path: '/', sameSite: 'lax' });
-                }
-
-                refreshQueue.forEach((cb) => cb(newJwt));
-                refreshQueue = [];
-
-                originalRequest.headers.Authorization = `Bearer ${newJwt}`;
-                return api(originalRequest);
-            } catch (refreshError) {
-                refreshQueue = [];
-                Cookies.remove('jwt', { path: '/' });
-                Cookies.remove('refreshToken', { path: '/' });
-                if (typeof window !== 'undefined') {
-                    window.location.href = '/login';
-                }
-                return Promise.reject(refreshError);
-            } finally {
-                isRefreshing = false;
+            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+                window.location.href = '/login';
             }
         }
-
         return Promise.reject(error);
     }
 );
 
 export const registerUserApi = async (data: { username: string; email: string; password: string }) => {
     const response = await api.post('/auth/local/register', data);
+    if (response.data?.jwt) {
+        Cookies.set('jwt', response.data.jwt, { expires: 7, path: '/', sameSite: 'lax' });
+    }
     return response.data;
 };
 
 export const loginUserApi = async (data: { identifier: string; password: string }) => {
     const response = await api.post('/auth/local', data);
+    if (response.data?.jwt) {
+        Cookies.set('jwt', response.data.jwt, { expires: 7, path: '/', sameSite: 'lax' });
+    }
     return response.data;
 };
 
-// lib/api.ts
-
 export const getMeApi = async () => {
-    // Populate role specifically
     const response = await api.get('/users/me?populate[role][fields][0]=name&populate[role][fields][1]=type');
     return response.data;
 };
 
 export const getCoursesApi = async () => {
     const response = await api.get('/courses?populate=*');
+    return response.data;
+};
+
+export const deleteCourseApi = async (id: string | number) => {
+    const response = await api.delete(`/courses/${id}`);
     return response.data;
 };
 

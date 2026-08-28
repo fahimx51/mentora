@@ -24,7 +24,10 @@
     "correctOption": {
       "type": "enumeration",
       "enum": [
-        "A, B, C, D"
+        "A",
+        "B",
+        "C",
+        "D"
       ]
     }
   },

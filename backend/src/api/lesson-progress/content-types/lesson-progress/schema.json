@@ -7,15 +7,14 @@
     "displayName": "LessonProgress"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
     "student": {
       "type": "relation",
       "relation": "manyToOne",
-      "target": "plugin::users-permissions.user",
-      "inversedBy": "lesson_progresses"
+      "target": "plugin::users-permissions.user"
     },
     "lesson": {
       "type": "relation",
@@ -23,7 +22,7 @@
       "target": "api::lesson.lesson",
       "inversedBy": "lesson_progresses"
     },
-    "completed": {
+    "isCompleted": {
       "type": "boolean",
       "default": false
     }
