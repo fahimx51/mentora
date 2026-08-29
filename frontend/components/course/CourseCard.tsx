@@ -9,20 +9,13 @@ export interface Course {
     title?: string;
     description?: string;
     slug?: string;
+    // Updated thumbnail type to accept direct text string or legacy media object
+    thumbnail: string;
     attributes?: {
         title?: string;
         description?: string;
         slug?: string;
-        thumbnail?: {
-            data?: {
-                attributes?: {
-                    url?: string;
-                };
-            };
-        };
-    };
-    thumbnail?: {
-        url?: string;
+        thumbnail?: string | { data?: { attributes?: { url?: string } } };
     };
 }
 
@@ -34,19 +27,14 @@ interface CourseCardProps {
 }
 
 export default function CourseCard({ course, href, isDashboard = false, onDelete }: CourseCardProps) {
-    // Extract normalized data across Strapi v4 / v5 responses
+    // Extract normalized data across Strapi responses
     const title = course.title || course.attributes?.title || 'Untitled Course';
     const description = course.description || course.attributes?.description || 'No description provided.';
     const slug = course.slug || course.attributes?.slug || course.id.toString();
 
-    const rawThumbnailUrl =
-        course.thumbnail?.url ||
-        course.attributes?.thumbnail?.data?.attributes?.url;
 
-    const API_URL = process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://localhost:1337';
-    const thumbnailUrl = rawThumbnailUrl
-        ? (rawThumbnailUrl.startsWith('http') ? rawThumbnailUrl : `${API_URL}${rawThumbnailUrl}`)
-        : null;
+
+    const thumbnailUrl: string = course.thumbnail;
 
     // Default target link
     const targetHref = href || (isDashboard ? `/dashboard/courses/${course.id}` : `/courses/${slug}`);
@@ -61,6 +49,10 @@ export default function CourseCard({ course, href, isDashboard = false, onDelete
                             src={thumbnailUrl}
                             alt={title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                            onError={(e) => {
+                                // Fallback image if external URL fails to load
+                                (e.target as HTMLImageElement).src = '/placeholder-course.png';
+                            }}
                         />
                     ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">

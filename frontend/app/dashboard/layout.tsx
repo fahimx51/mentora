@@ -31,7 +31,7 @@ const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.Eleme
         { label: "Blog Posts", href: "/dashboard/blog", icon: Newspaper },
         { label: "Platform Stats", href: "/dashboard/stats", icon: BarChart3 },
     ],
-    "Content-Manager": [
+    "Content Manager": [
         { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
         { label: "All Courses", href: "/dashboard/courses", icon: BookOpen },
         { label: "Create Course", href: "/dashboard/courses/create", icon: PlusCircle },
@@ -41,9 +41,10 @@ const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.Eleme
     ],
     Instructor: [
         { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-        { label: "My Courses", href: "/dashboard/my-courses", icon: GraduationCap },
+        { label: "All Courses", href: "/dashboard/courses", icon: BookOpen },
         { label: "Create Course", href: "/dashboard/courses/create", icon: PlusCircle },
         { label: "Create Lesson", href: "/dashboard/lessons/create", icon: Video },
+        { label: "Create Quiz", href: "/dashboard/quizzes/create", icon: HelpCircle },
     ],
     Student: [
         { label: "Overview", href: "/dashboard", icon: LayoutDashboard },

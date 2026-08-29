@@ -57,9 +57,7 @@ interface CourseDetails {
     instructor?: {
         username?: string;
     };
-    thumbnail?: {
-        url?: string;
-    };
+    thumbnail?: string | { url?: string };
     lessons?: Lesson[];
     quizzes?: Quiz[];
 }
@@ -73,6 +71,7 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
     const courseId = resolvedParams.id;
 
     const { user } = useAuth();
+
     const [course, setCourse] = useState<CourseDetails | null>(null);
     const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
     const [activeItem, setActiveItem] = useState<TimelineItem | null>(null);
@@ -86,12 +85,12 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         try {
             if (!isBackground) setIsLoading(true);
 
+            // Removed 'populate[thumbnail]': 'true' because thumbnail is a text field
             const response = await api.get(`/courses/${courseId}`, {
                 params: {
                     'populate[lessons][populate][lesson_progresses][populate]': '*',
                     'populate[quizzes]': 'true',
                     'populate[instructor]': 'true',
-                    'populate[thumbnail]': 'true',
                 },
             });
 
@@ -220,7 +219,8 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
     };
 
     const getImageUrl = () => {
-        const url = course?.thumbnail?.url;
+        const rawThumbnail = course?.thumbnail;
+        const url = typeof rawThumbnail === 'string' ? rawThumbnail : rawThumbnail?.url;
         if (!url) return null;
         return url.startsWith('http')
             ? url

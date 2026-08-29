@@ -6,15 +6,19 @@ import { Plus, BookOpen, AlertTriangle } from 'lucide-react';
 import { getCoursesApi, deleteCourseApi } from '@/lib/api';
 import CourseCard, { Course } from '@/components/course/CourseCard';
 import CourseCardSkeleton from '@/components/course/CourseCardSkeleton';
+import { useAuth } from '@/context/auth-context/AuthContext';
 
 export default function CoursesPage() {
+    const { user } = useAuth(); // Retrieve current logged-in user details
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        fetchCourses();
-    }, []);
+        if (user) {
+            fetchCourses();
+        }
+    }, [user]);
 
     const fetchCourses = async () => {
         try {
@@ -23,8 +27,40 @@ export default function CoursesPage() {
             const res = await getCoursesApi();
 
             // Support both Strapi v4/v5 response structures
-            const courseList = Array.isArray(res) ? res : res.data || [];
-            setCourses(courseList);
+            const rawList = Array.isArray(res) ? res : res.data || [];
+
+            // Standardize course structure with instructor data
+            const formattedList: Course[] = rawList.map((item: any) => {
+                const attrs = item.attributes || item;
+                const instructorData = attrs.instructor?.data?.attributes || attrs.instructor;
+
+                return {
+                    id: item.id,
+                    documentId: item.documentId || item.id,
+                    title: attrs.title || 'Untitled Course',
+                    description: attrs.description || '',
+                    thumbnail: attrs.thumbnail || attrs.cover || '',
+                    instructor: instructorData ? {
+                        id: instructorData.id,
+                        username: instructorData.username || '',
+                        email: instructorData.email || '',
+                    } : null,
+                };
+            });
+
+            // Role-based filtering on frontend:
+            // Admin gets all courses, Instructor gets only their own courses
+            const userRole = user?.role?.name?.toLowerCase();
+
+            if (userRole === 'instructor') {
+                const instructorCourses = formattedList.filter(
+                    (course: any) => course.instructor?.username === user?.username
+                );
+                setCourses(instructorCourses);
+            } else {
+                setCourses(formattedList);
+            }
+
         } catch (err: any) {
             console.error('Failed to load courses:', err);
             setError('Failed to fetch courses. Please try again later.');
@@ -54,9 +90,9 @@ export default function CoursesPage() {
             {/* Header Section */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Admin Course Management</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Course Management</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        Manage, edit, or delete courses for your platform.
+                        Manage, edit, or delete courses on your platform.
                     </p>
                 </div>
                 <Link
@@ -89,7 +125,7 @@ export default function CoursesPage() {
                     </div>
                     <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No courses found</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">
-                        You haven't added any courses yet. Start by creating one!
+                        No courses available for your account yet.
                     </p>
                     <Link
                         href="/dashboard/courses/create"
@@ -99,7 +135,7 @@ export default function CoursesPage() {
                     </Link>
                 </div>
             ) : (
-                /* Admin Courses Grid */
+                /* Admin & Instructor Courses Grid */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {courses.map((course) => (
                         <CourseCard

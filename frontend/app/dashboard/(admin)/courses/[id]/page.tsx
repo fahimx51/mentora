@@ -362,7 +362,7 @@ export default function SingleCourseAdminPage() {
                             <Users className="w-4 h-4" /> Student Progress
                         </Link>
                         <Link
-                            href={`/dashboard/courses/edit/${courseDocId}`}
+                            href={`/dashboard/courses/${courseDocId}/edit`}
                             className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-semibold transition-all inline-flex items-center gap-1.5 shadow-sm"
                         >
                             <Edit className="w-4 h-4" /> Edit Course

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Loader2, AlertTriangle, CheckCircle2, Upload } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertTriangle, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/auth-context/AuthContext';
 
@@ -23,9 +23,7 @@ export default function EditCoursePage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [selectedInstructor, setSelectedInstructor] = useState<string>('');
-    const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string>('');
-    const [existingThumbnailId, setExistingThumbnailId] = useState<number | null>(null);
+    const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
     const [realTargetId, setRealTargetId] = useState<string>('');
 
     // Dynamic Data & Status
@@ -66,30 +64,14 @@ export default function EditCoursePage() {
         }
     };
 
-    // Clean Fetch Course Details (No 404 error)
+    // Fetch Course Details
     const fetchCourseDetails = async () => {
         try {
             setIsLoadingCourse(true);
             setError('');
 
-            let courseData: any = null;
-            const isNumericId = /^\d+$/.test(courseId);
-
-            if (isNumericId) {
-                // Numeric ID: Query by filters directly to prevent 404 in Strapi v5
-                const res = await api.get(`/courses?filters[id][$eq]=${courseId}&populate=*`);
-                const items = res.data?.data || res.data || [];
-                if (items.length > 0) {
-                    courseData = items[0];
-                } else {
-                    throw new Error('Course not found');
-                }
-            } else {
-                // String documentId: Fetch directly
-                const res = await api.get(`/courses/${courseId}?populate=*`);
-                courseData = res.data?.data || res.data;
-            }
-
+            const res = await api.get(`/courses/${courseId}?populate=*`);
+            const courseData = res.data?.data || res.data;
             const attributes = courseData?.attributes || courseData;
 
             // Save documentId for PUT request (Strapi v5 priority) or fallback to ID
@@ -104,17 +86,16 @@ export default function EditCoursePage() {
                 setSelectedInstructor(String(instructorObj.id));
             }
 
-            // Thumbnail extraction
-            const thumbObj = attributes?.thumbnail?.data || attributes?.thumbnail;
-            if (thumbObj) {
-                setExistingThumbnailId(thumbObj.id || null);
-                const imageUrl = thumbObj.attributes?.url || thumbObj.url;
-                if (imageUrl) {
-                    const fullUrl = imageUrl.startsWith('http')
-                        ? imageUrl
-                        : `${process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://localhost:1337'}${imageUrl}`;
-                    setPreviewUrl(fullUrl);
-                }
+            // Thumbnail extraction (URL string or legacy object URL)
+            const thumbVal = attributes?.thumbnail;
+            if (typeof thumbVal === 'string') {
+                setThumbnailUrl(thumbVal);
+            } else if (thumbVal?.data?.attributes?.url || thumbVal?.url) {
+                const rawUrl = thumbVal?.data?.attributes?.url || thumbVal?.url;
+                const fullUrl = rawUrl.startsWith('http')
+                    ? rawUrl
+                    : `${process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://localhost:1337'}${rawUrl}`;
+                setThumbnailUrl(fullUrl);
             }
         } catch (err: any) {
             console.error('Failed to fetch course details:', err);
@@ -124,60 +105,34 @@ export default function EditCoursePage() {
         }
     };
 
-    const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setThumbnailFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setSuccessMsg('');
 
-        if (!title.trim() || !description.trim()) {
-            setError('Please fill out all required fields.');
+        if (!title.trim() || !description.trim() || !thumbnailUrl.trim()) {
+            setError('Please fill out all required fields, including the thumbnail URL.');
             return;
         }
 
         try {
             setIsSubmitting(true);
-            let thumbnailId: number | null = existingThumbnailId;
 
             const token = localStorage.getItem('token') || localStorage.getItem('jwt');
             const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
-            // Step 1: Upload new image to Strapi if selected
-            if (thumbnailFile) {
-                const formData = new FormData();
-                formData.append('files', thumbnailFile);
-
-                const uploadRes = await api.post('/upload', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                        ...authHeader,
-                    },
-                });
-
-                if (uploadRes.data && uploadRes.data[0]) {
-                    thumbnailId = uploadRes.data[0].id;
-                }
-            }
-
-            // Step 2: Selected instructor or fallback
+            // Selected instructor or fallback
             const finalInstructorId = selectedInstructor
                 ? Number(selectedInstructor)
                 : (currentUser?.id ?? null);
 
-            // Step 3: Payload structure for Strapi
+            // Update course payload with direct thumbnail URL text string
             const coursePayload = {
                 data: {
                     title: title.trim(),
                     description: description.trim(),
+                    thumbnail: thumbnailUrl.trim(),
                     instructor: finalInstructorId,
-                    ...(thumbnailId && { thumbnail: thumbnailId }),
                 },
             };
 
@@ -190,7 +145,7 @@ export default function EditCoursePage() {
 
             setSuccessMsg('Course updated successfully!');
             setTimeout(() => {
-                router.push('/dashboard/courses');
+                router.push(`/dashboard/courses/${courseId}`);
             }, 1500);
         } catch (err: any) {
             console.error('Failed to update course:', err);
@@ -210,15 +165,15 @@ export default function EditCoursePage() {
             {/* Top Header */}
             <div>
                 <Link
-                    href="/dashboard/courses"
+                    href={`/dashboard/courses/${courseId}`}
                     className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors mb-4"
                 >
                     <ArrowLeft size={16} />
-                    Back to Courses
+                    Back to Details
                 </Link>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Edit Course</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Update course details, instructor, and thumbnail.
+                    Update course details, instructor, and thumbnail URL.
                 </p>
             </div>
 
@@ -312,35 +267,21 @@ export default function EditCoursePage() {
                         )}
                     </div>
 
-                    {/* Thumbnail Upload */}
+                    {/* Thumbnail URL Input */}
                     <div className="space-y-2">
                         <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                            Course Thumbnail
+                            Course Thumbnail URL <span className="text-red-500">*</span>
                         </label>
-
-                        <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center bg-slate-50/50 dark:bg-slate-800/30 hover:border-primary/50 transition-colors cursor-pointer relative">
+                        <div className="relative">
                             <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleThumbnailChange}
-                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                type="url"
+                                required
+                                placeholder="https://images.unsplash.com/photo-1516321318423-f06f85e504b3"
+                                value={thumbnailUrl}
+                                onChange={(e) => setThumbnailUrl(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                             />
-                            {previewUrl ? (
-                                <div className="flex flex-col items-center gap-3">
-                                    <img
-                                        src={previewUrl}
-                                        alt="Thumbnail Preview"
-                                        className="h-40 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
-                                    />
-                                    <span className="text-xs text-slate-500">Click or drag to replace image</span>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-2 text-slate-500 dark:text-slate-400">
-                                    <Upload size={24} className="text-primary" />
-                                    <span className="text-sm font-medium">Click to upload or drag image here</span>
-                                    <span className="text-xs text-slate-400">PNG, JPG, or WEBP up to 5MB</span>
-                                </div>
-                            )}
+                            <ImageIcon size={18} className="absolute left-3 top-3 text-slate-400" />
                         </div>
                     </div>
 

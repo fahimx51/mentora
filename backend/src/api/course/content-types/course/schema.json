@@ -12,20 +12,12 @@
   "pluginOptions": {},
   "attributes": {
     "title": {
-      "type": "string"
+      "type": "string",
+      "required": true
     },
     "description": {
-      "type": "text"
-    },
-    "thumbnail": {
-      "type": "media",
-      "multiple": false,
-      "allowedTypes": [
-        "images",
-        "files",
-        "videos",
-        "audios"
-      ]
+      "type": "text",
+      "required": true
     },
     "instructor": {
       "type": "relation",
@@ -50,6 +42,10 @@
       "relation": "oneToMany",
       "target": "api::enrollment.enrollment",
       "mappedBy": "course"
+    },
+    "thumbnail": {
+      "type": "string",
+      "required": true
     }
   }
 }

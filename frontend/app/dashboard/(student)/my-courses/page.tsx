@@ -45,9 +45,7 @@ interface Course {
     documentId: string;
     title: string;
     description?: string;
-    thumbnail?: {
-        url: string;
-    };
+    thumbnail?: string; // String URL for the thumbnail
     instructor?: Instructor;
     lessons?: Lesson[];
     quizzes?: Quiz[];
@@ -67,17 +65,17 @@ export default function MyCoursesPage() {
             try {
                 setIsLoading(true);
 
-                // Fetch user enrollments and populate course details safely
+                // Populate relational fields only (instructor, lessons, quizzes)
+                // Removed 'populate[course][populate][thumbnail]' to prevent Strapi 400 validation error
                 const response = await api.get('/enrollments', {
                     params: {
-                        'populate[course][populate][thumbnail]': 'true',
                         'populate[course][populate][instructor]': 'true',
                         'populate[course][populate][lessons]': 'true',
                         'populate[course][populate][quizzes]': 'true',
                     },
                 });
 
-                // Fetch lesson progress for current user to reliably track completed lessons
+                // Fetch lesson progress for current user to track completed lessons
                 const progressResponse = await api.get('/lesson-progresses', {
                     params: {
                         'populate[lesson]': 'true',
@@ -119,12 +117,18 @@ export default function MyCoursesPage() {
                                 ? rawQuizzes
                                 : [];
 
+                        // Safely parse thumbnail string URL or nested format
+                        const thumbnailVal = courseData.thumbnail || courseData.attributes?.thumbnail;
+                        const parsedThumbnail = typeof thumbnailVal === 'string'
+                            ? thumbnailVal
+                            : thumbnailVal?.url || thumbnailVal?.data?.attributes?.url || null;
+
                         return {
                             id: courseData.id,
                             documentId: courseData.documentId || courseData.id,
                             title: courseData.title || courseData.attributes?.title || 'Untitled Course',
                             description: courseData.description || courseData.attributes?.description,
-                            thumbnail: courseData.thumbnail?.data?.attributes || courseData.thumbnail || courseData.attributes?.thumbnail,
+                            thumbnail: parsedThumbnail,
                             instructor: courseData.instructor?.data?.attributes || courseData.instructor || courseData.attributes?.instructor,
                             lessons: parsedLessons,
                             quizzes: parsedQuizzes,
@@ -193,7 +197,7 @@ export default function MyCoursesPage() {
                         const totalLessons = lessons.length;
                         const totalQuizzes = course.quizzes?.length || 0;
 
-                        // Calculate completed lessons using the fetched progress items
+                        // Calculate completed lessons using fetched progress items
                         const completedLessons = lessons.filter((lesson) => {
                             return userProgresses.some((prog) => {
                                 const progLessonObj = typeof prog.lesson === 'object' ? prog.lesson : null;
@@ -211,7 +215,7 @@ export default function MyCoursesPage() {
                             ? Math.round((completedLessons / totalLessons) * 100)
                             : 0;
 
-                        const rawUrl = course.thumbnail?.url;
+                        const rawUrl = course.thumbnail;
                         const thumbnailUrl = rawUrl
                             ? rawUrl.startsWith('http')
                                 ? rawUrl

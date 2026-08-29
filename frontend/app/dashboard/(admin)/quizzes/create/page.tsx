@@ -144,7 +144,7 @@ export default function CreateQuizPage() {
 
             // Redirect after 1.5 seconds so user can see the success UI
             setTimeout(() => {
-                router.push('/dashboard/quizzes');
+                router.push('/dashboard/courses');
             }, 1500);
         } catch (err: any) {
             console.error('Failed to create quiz:', err);

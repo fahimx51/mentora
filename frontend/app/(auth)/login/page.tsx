@@ -32,7 +32,7 @@ export default function LoginPage() {
 
         try {
             const result = await loginUserApi(formData);
-            console.log(result);
+            // console.log(result);
 
             // 1. Save tokens to cookies
             Cookies.set('jwt', result.jwt, { expires: 7, path: '/', sameSite: 'lax' });

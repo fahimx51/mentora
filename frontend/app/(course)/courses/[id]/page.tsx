@@ -28,9 +28,7 @@ interface Course {
         username?: string;
         email?: string;
     };
-    thumbnail?: {
-        url?: string;
-    };
+    thumbnail?: string; // String URL for text field
     lessonsCount?: number;
     quizzesCount?: number;
     duration?: string;
@@ -69,7 +67,9 @@ export default function CourseDetailsPage() {
             let courseData: any = null;
             const isNumericId = /^\d+$/.test(courseId);
 
-            const populateQuery = 'populate[0]=lessons&populate[1]=quizzes&populate[2]=instructor&populate[3]=thumbnail';
+            // Populate relational fields only (lessons, quizzes, instructor)
+            // Removed populate[3]=thumbnail because thumbnail is a text field
+            const populateQuery = 'populate[0]=lessons&populate[1]=quizzes&populate[2]=instructor';
 
             if (isNumericId) {
                 const res = await api.get(`/courses?filters[id][$eq]=${courseId}&${populateQuery}`);
@@ -89,13 +89,19 @@ export default function CourseDetailsPage() {
             const lessonsData = attributes?.lessons?.data || attributes?.lessons || [];
             const quizzesData = attributes?.quizzes?.data || attributes?.quizzes || [];
 
+            // Safely parse string URL or object fallback
+            const rawThumbnail = attributes?.thumbnail;
+            const parsedThumbnail = typeof rawThumbnail === 'string'
+                ? rawThumbnail
+                : rawThumbnail?.data?.attributes?.url || rawThumbnail?.url || '';
+
             setCourse({
                 id: courseData?.id,
                 documentId: courseData?.documentId,
                 title: attributes?.title || '',
                 description: attributes?.description || '',
                 instructor: attributes?.instructor?.data?.attributes || attributes?.instructor || attributes?.instructor?.data,
-                thumbnail: attributes?.thumbnail?.data?.attributes || attributes?.thumbnail,
+                thumbnail: parsedThumbnail,
                 lessonsCount: Array.isArray(lessonsData) ? lessonsData.length : 0,
                 quizzesCount: Array.isArray(quizzesData) ? quizzesData.length : 0,
                 duration: attributes?.duration || 'Self-paced',
@@ -107,6 +113,7 @@ export default function CourseDetailsPage() {
             setIsLoading(false);
         }
     };
+
 
     const checkUserEnrollment = async () => {
         try {
@@ -160,27 +167,22 @@ export default function CourseDetailsPage() {
         }
     };
 
+    const userRole = user?.role?.name || user?.role?.type || 'Student';
+
+    const hasFullAccess = userRole === "Admin" || userRole === "Content Manager" || isAlreadyEnrolled || userRole === "Instructor";
+
+    const adminPower = userRole === "Content Manager" || userRole ===  "Admin" || user?.username === course?.instructor?.username;
+
     const handleGoToCourse = () => {
         const targetId = course?.documentId || courseId;
-        router.push(`/dashboard/my-courses/${targetId}`);
+        if (adminPower) {
+            router.push(`/dashboard/courses/${targetId}`)
+        }
+        else {
+            router.push(`/dashboard/my-courses/${targetId}`);
+
+        }
     };
-
-    const userRole = user?.role?.name?.toLowerCase() || user?.role?.type?.toLowerCase() || '';
-    const isAdmin = userRole.includes('admin');
-    const isContentManager = userRole.includes('manager') || userRole.includes('content');
-    const isInstructor = userRole.includes('instructor') || course?.instructor?.id === user?.id;
-
-    const hasFullAccess = isAdmin || isContentManager || isInstructor || isAlreadyEnrolled;
-
-    const getImageUrl = () => {
-        const url = course?.thumbnail?.url;
-        if (!url) return null;
-        return url.startsWith('http')
-            ? url
-            : `${process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://localhost:1337'}${url}`;
-    };
-
-    const thumbnailUrl = getImageUrl();
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -205,10 +207,10 @@ export default function CourseDetailsPage() {
                     </div>
                 ) : course ? (
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
-                        {thumbnailUrl ? (
+                        {course.thumbnail ? (
                             <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
                                 <img
-                                    src={thumbnailUrl}
+                                    src={course.thumbnail}
                                     alt={course.title}
                                     className="w-full h-full object-cover"
                                 />
