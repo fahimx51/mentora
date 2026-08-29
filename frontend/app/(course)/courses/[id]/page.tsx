@@ -117,21 +117,18 @@ export default function CourseDetailsPage() {
 
     const checkUserEnrollment = async () => {
         try {
-            const courseTarget = course?.documentId || course?.id;
+            const courseDocId = course?.documentId || course?.id;
+            if (!courseDocId) return;
 
-            if (!courseTarget) return;
-
-            // Only filter by course; Strapi handles user scope automatically via token
+            // No student filter needed here; backend attaches it automatically
             const res = await api.get('/enrollments', {
                 params: {
-                    'filters[course][documentId][$eq]': courseTarget,
+                    'filters[course][documentId][$eq]': courseDocId,
                 },
             });
 
             const enrollments = res.data?.data || res.data || [];
-            if (enrollments.length > 0) {
-                setIsAlreadyEnrolled(true);
-            }
+            setIsAlreadyEnrolled(enrollments.length > 0);
         } catch (err) {
             console.error('Failed to check enrollment status:', err);
         }
@@ -148,12 +145,13 @@ export default function CourseDetailsPage() {
             setError('');
             setSuccessMsg('');
 
-            const courseTarget = course?.documentId || course?.id;
+            const courseDocId = course?.documentId || course?.id;
+            const userId = user?.id;
 
-            // Send relation payload to enroll
             await api.post('/enrollments', {
                 data: {
-                    course: courseTarget,
+                    course: courseDocId,
+                    student: userId, // Match schema field 'student' using numeric ID or docId
                 },
             });
 
@@ -161,7 +159,7 @@ export default function CourseDetailsPage() {
             setSuccessMsg('Successfully enrolled in this course!');
         } catch (err: any) {
             console.error('Enrollment failed:', err);
-            setError(err.response?.data?.error?.message || 'Failed to enroll. You might already be enrolled.');
+            setError(err.response?.data?.error?.message || 'Failed to enroll.');
         } finally {
             setIsEnrolling(false);
         }
@@ -171,7 +169,7 @@ export default function CourseDetailsPage() {
 
     const hasFullAccess = userRole === "Admin" || userRole === "Content Manager" || isAlreadyEnrolled || userRole === "Instructor";
 
-    const adminPower = userRole === "Content Manager" || userRole ===  "Admin" || user?.username === course?.instructor?.username;
+    const adminPower = userRole === "Content Manager" || userRole === "Admin" || user?.username === course?.instructor?.username;
 
     const handleGoToCourse = () => {
         const targetId = course?.documentId || courseId;

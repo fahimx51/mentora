@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, PlayCircle, BookOpen, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, PlayCircle, BookOpen, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/auth-context/AuthContext';
 
 interface Course {
     id: number;
@@ -14,6 +15,7 @@ interface Course {
 
 export default function CreateLessonPage() {
     const router = useRouter();
+    const { user, isLoading: isAuthLoading } = useAuth();
 
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoadingCourses, setIsLoadingCourses] = useState(true);
@@ -27,14 +29,30 @@ export default function CreateLessonPage() {
     const [error, setError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
 
+    const searchParams = useSearchParams();
+    const courseId = searchParams.get('courseId');
+    const isCourseLocked = Boolean(courseId);
+
     useEffect(() => {
-        fetchCourses();
-    }, []);
+        if (!isAuthLoading) {
+            fetchCourses();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthLoading]);
 
     const fetchCourses = async () => {
         try {
             setIsLoadingCourses(true);
-            const res = await api.get('/courses');
+
+            const roleName = user?.role?.name?.toLowerCase();
+
+            // Instructors only see their own courses
+            const query =
+                roleName === 'instructor'
+                    ? `/courses?filters[instructor][id][$eq]=${user?.id}`
+                    : '/courses';
+
+            const res = await api.get(query);
             const data = res.data?.data || res.data || [];
 
             const parsedCourses = data.map((item: any) => ({
@@ -44,8 +62,21 @@ export default function CreateLessonPage() {
             }));
 
             setCourses(parsedCourses);
-            if (parsedCourses.length > 0) {
-                setSelectedCourse(parsedCourses[0].documentId || String(parsedCourses[0].id));
+
+            if (courseId) {
+                // Lock to the course passed via URL, if it's in the fetched list
+                const matched = parsedCourses.find(
+                    (c: Course) => String(c.documentId || c.id) === String(courseId)
+                );
+                if (matched) {
+                    setSelectedCourse(String(matched.documentId || matched.id));
+                } else {
+                    // Course wasn't in their allowed list (e.g. not their own) — block silently
+                    setSelectedCourse('');
+                    setError('You do not have access to add lessons to this course.');
+                }
+            } else if (parsedCourses.length > 0) {
+                setSelectedCourse(String(parsedCourses[0].documentId || parsedCourses[0].id));
             }
         } catch (err) {
             console.error('Failed to fetch courses:', err);
@@ -84,7 +115,11 @@ export default function CreateLessonPage() {
 
             setSuccessMsg('Lesson created successfully!');
             setTimeout(() => {
-                router.push('/dashboard/my-courses');
+                if (courseId) {
+                    router.push(`/dashboard/courses/${courseId}`);
+                } else {
+                    router.push('/dashboard/courses');
+                }
             }, 1500);
         } catch (err: any) {
             console.error('Failed to create lesson:', err);
@@ -151,7 +186,9 @@ export default function CreateLessonPage() {
                                     value={selectedCourse}
                                     onChange={(e) => setSelectedCourse(e.target.value)}
                                     required
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm appearance-none"
+                                    disabled={isCourseLocked}
+                                    className={`w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary text-sm appearance-none ${isCourseLocked ? 'opacity-60 cursor-not-allowed' : ''
+                                        }`}
                                 >
                                     {courses.map((c) => (
                                         <option key={c.id} value={c.documentId || c.id}>
@@ -161,6 +198,11 @@ export default function CreateLessonPage() {
                                 </select>
                                 <BookOpen size={16} className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" />
                             </div>
+                        )}
+                        {isCourseLocked && (
+                            <p className="text-xs text-slate-500">
+                                Course is preselected and cannot be changed.
+                            </p>
                         )}
                     </div>
                 </div>
@@ -203,7 +245,7 @@ export default function CreateLessonPage() {
                     </Link>
                     <button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || !selectedCourse}
                         className="px-8 py-3 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-hover text-white shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                         {isSubmitting ? (

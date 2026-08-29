@@ -21,6 +21,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/auth-context/AuthContext';
 import VideoPlayer from '@/components/shared/VideoPlayer';
+import Image from 'next/image';
 
 interface LessonProgress {
     id?: number;
@@ -35,7 +36,7 @@ interface Lesson {
     documentId: string;
     title: string;
     content?: string;
-    videoUrl?: string;
+    videoUrl: string;
     createdAt?: string;
     lesson_progresses?: LessonProgress[];
 }
@@ -57,7 +58,7 @@ interface CourseDetails {
     instructor?: {
         username?: string;
     };
-    thumbnail?: string | { url?: string };
+    thumbnail: string;
     lessons?: Lesson[];
     quizzes?: Quiz[];
 }
@@ -85,14 +86,10 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         try {
             if (!isBackground) setIsLoading(true);
 
-            // Removed 'populate[thumbnail]': 'true' because thumbnail is a text field
-            const response = await api.get(`/courses/${courseId}`, {
-                params: {
-                    'populate[lessons][populate][lesson_progresses][populate]': '*',
-                    'populate[quizzes]': 'true',
-                    'populate[instructor]': 'true',
-                },
-            });
+            // Fetch course along with nested lesson progresses, quizzes, and instructor details
+            const response = await api.get(
+                `/courses/${courseId}?populate[lessons][populate][0]=lesson_progresses&populate[quizzes]=true&populate[instructor]=true`
+            );
 
             const data: CourseDetails = response?.data?.data || response?.data;
             setCourse(data);
@@ -152,8 +149,10 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
                 data: {
                     isCompleted: true,
                     student: studentVal,
-                    lesson: lessonVal
-                }
+                    lesson: lessonVal,
+                    publishedAt: new Date().toISOString()
+                },
+                status: 'published'
             };
 
             let res;
@@ -218,17 +217,6 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         }
     };
 
-    const getImageUrl = () => {
-        const rawThumbnail = course?.thumbnail;
-        const url = typeof rawThumbnail === 'string' ? rawThumbnail : rawThumbnail?.url;
-        if (!url) return null;
-        return url.startsWith('http')
-            ? url
-            : `${process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://localhost:1337'}${url}`;
-    };
-
-    const thumbnailUrl = getImageUrl();
-
     // Calculate progress
     const totalLessons = course?.lessons?.length || 0;
     const completedLessonsCount = course?.lessons?.filter(isLessonCompleted).length || 0;
@@ -286,12 +274,13 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
                     {activeItem === null ? (
                         /* Course Overview Screen */
                         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm p-4 sm:p-6 space-y-4 sm:space-y-6">
-                            {thumbnailUrl && (
+                            {course.thumbnail && (
                                 <div className="relative h-44 sm:h-64 w-full overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
-                                    <img
-                                        src={thumbnailUrl}
+                                    <Image
+                                        src={course.thumbnail}
                                         alt={course.title}
-                                        className="w-full h-full object-cover"
+                                        fill
+                                        className="object-cover"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 right-3 sm:right-4 flex items-center justify-between text-white">
@@ -409,6 +398,7 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
                             <VideoPlayer
                                 url={activeItem.data.videoUrl}
                                 title={activeItem.data.title}
+                                content={activeItem.data.content}
                             />
 
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-b border-slate-100 dark:border-slate-800/80 pb-3 sm:pb-4">

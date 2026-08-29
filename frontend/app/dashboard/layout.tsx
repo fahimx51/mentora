@@ -19,6 +19,7 @@ import {
 import Logo from "@/components/shared/Logo";
 import ToggleMode from "@/components/header/toggle-mode";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
+import PrivateRoute from "@/components/route/PrivateRoute";
 
 const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
     Admin: [
@@ -53,7 +54,7 @@ const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.Eleme
     ],
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
     const { user, isLoading } = useAuth();
     const pathname = usePathname();
 
@@ -61,32 +62,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return <DashboardSkeleton />;
     }
 
-    if (!user) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-4 text-center">
-                <p className="text-lg font-medium text-slate-800 dark:text-slate-200">
-                    Please log in to view your dashboard.
-                </p>
-                <Link
-                    href="/login"
-                    className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium shadow-md transition-all duration-200"
-                >
-                    Go to Login
-                </Link>
-            </div>
-        );
-    }
-
-    const roleName = user.role?.name ?? "Student";
+    const roleName = user?.role?.name ?? "Student";
     const navItems = NAV_ITEMS[roleName] ?? [];
 
     return (
         <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
-            {/* Responsive Sidebar */}
-            <aside className="w-16 sm:w-20 lg:w-64 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 transition-all duration-300">
+            {/* Fixed Left Sidebar */}
+            <aside className="sticky top-0 h-screen w-16 sm:w-20 lg:w-64 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 transition-all duration-300">
 
                 {/* Header / Brand */}
-                <div className="p-3 sm:p-4 flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800">
+                <div className="p-3 sm:p-4 flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 shrink-0">
                     <div className="overflow-hidden">
                         <Logo />
                     </div>
@@ -96,13 +81,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
 
                 {/* User Profile Badge Box */}
-                <div className="p-3 sm:p-4 border-b border-slate-200/80 dark:border-slate-800 flex gap-4 justify-center items-center lg:items-start text-center lg:text-left">
+                <div className="p-3 sm:p-4 border-b border-slate-200/80 dark:border-slate-800 flex gap-4 justify-center items-center lg:items-start text-center lg:text-left shrink-0">
                     <div className="w-9 h-9 lg:w-10 lg:h-10 xl:w-12 xl:h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-                        {user.username?.charAt(0).toUpperCase()}
+                        {user?.username?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div className="hidden lg:block min-w-0 w-full">
                         <p className="font-semibold truncate text-sm text-primary dark:text-white">
-                            @{user.username}
+                            @{user?.username}
                         </p>
                         <span className="inline-block px-2.5 py-0.5 text-[11px] font-medium rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60">
                             {roleName}
@@ -110,8 +95,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </div>
 
-                {/* Navigation Menu */}
-                <nav className="flex-1 p-2 sm:p-3 space-y-1 overflow-y-auto">
+                {/* Scrollable Navigation Menu */}
+                <nav className="flex-1 p-2 sm:p-3 space-y-1 overflow-y-auto min-h-0">
                     <ul className="space-y-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
@@ -137,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </nav>
 
                 {/* Bottom Tools */}
-                <div className="p-2 sm:p-3 border-t border-slate-200/80 dark:border-slate-800 flex flex-col items-center lg:flex-row lg:justify-between gap-2">
+                <div className="p-2 sm:p-3 border-t border-slate-200/80 dark:border-slate-800 flex flex-col items-center lg:flex-row lg:justify-between gap-2 shrink-0">
                     <Link
                         href="/"
                         title="Back to Home"
@@ -153,11 +138,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+            <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
                 <div>
                     {children}
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <PrivateRoute>
+            <DashboardContent>{children}</DashboardContent>
+        </PrivateRoute>
     );
 }

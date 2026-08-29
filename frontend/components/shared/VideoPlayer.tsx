@@ -23,6 +23,8 @@ const getEmbedUrl = (url?: string): string => {
 };
 
 export default function VideoPlayer({ url, title = 'Lesson Video' }: VideoPlayerProps) {
+
+    // console.log(url, content);
     const embedUrl = getEmbedUrl(url);
 
     if (!url || !embedUrl) {

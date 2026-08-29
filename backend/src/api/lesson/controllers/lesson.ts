@@ -15,16 +15,18 @@ export default factories.createCoreController('api::lesson.lesson', ({ strapi })
         });
 
         const userRole = fullUser?.role?.name?.toLowerCase();
+
+        // 1. Admin and Content Manager see everything
         if (userRole === 'admin' || userRole === 'content manager') {
             return await super.findOne(ctx);
         }
 
         const { id } = ctx.params;
 
-        // Fetch lesson with course relation
+        // Fetch lesson with course + instructor relation
         const lesson = await strapi.documents('api::lesson.lesson').findOne({
             documentId: String(id),
-            populate: ['course'],
+            populate: { course: { populate: ['instructor'] } },
         });
 
         if (!lesson) {
@@ -35,10 +37,18 @@ export default factories.createCoreController('api::lesson.lesson', ({ strapi })
             return ctx.badRequest('Lesson has no course assigned.');
         }
 
-        // Ensure string type for documentId filter
         const courseDocId = String(lesson.course.documentId || lesson.course.id);
 
-        // Verify enrollment
+        // 2. Instructor: allow only if they own this lesson's course
+        if (userRole === 'instructor') {
+            const isOwner = lesson.course.instructor?.id === user.id;
+            if (isOwner) {
+                return await super.findOne(ctx);
+            }
+            return ctx.forbidden('You can only access lessons from your own courses.');
+        }
+
+        // 3. Student: verify enrollment
         const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({
             filters: {
                 student: { id: user.id },

@@ -7,29 +7,51 @@ export default factories.createCoreController('api::course.course', ({ strapi })
 
         if (!response || !response.data) return response;
 
-        // Helper function to sanitize a single course object
         const sanitizeCourse = async (courseData: any) => {
-            // 1. Allow Admins and Content Managers
+            const courseDocId = String(courseData.documentId || courseData.id);
+
             if (user) {
+                const userDocId = String(user.documentId || user.id);
+
                 const fullUser = await strapi.documents('plugin::users-permissions.user').findOne({
-                    documentId: String(user.documentId || user.id),
+                    documentId: userDocId,
                     populate: ['role'],
                 });
 
                 const roleName = fullUser?.role?.name?.toLowerCase();
+
+                // 1. Admin and Content Manager see everything, always
                 if (roleName === 'admin' || roleName === 'content manager') {
                     return courseData;
                 }
+
+                // 2. Instructor sees everything ONLY for their own course
+                if (roleName === 'instructor') {
+                    const courseWithInstructor = await strapi.documents('api::course.course').findOne({
+                        documentId: courseDocId,
+                        populate: ['instructor'],
+                    });
+
+                    // Match via documentId or fallback id
+                    const isOwner =
+                        courseWithInstructor?.instructor?.documentId === user.documentId ||
+                        courseWithInstructor?.instructor?.id === user.id;
+
+                    if (isOwner) {
+                        return courseData;
+                    }
+                }
             }
 
-            const courseDocId = String(courseData.documentId || courseData.id);
-
-            // 2. Check Enrollment
+            // 3. Check Enrollment (Student, or non-owning Instructor)
             let isEnrolled = false;
             if (user) {
+                const userDocId = String(user.documentId || user.id);
+
+                // Strapi 5 FIX: Filter student using documentId instead of numeric id
                 const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({
                     filters: {
-                        student: { id: user.id },
+                        student: { documentId: { $eq: userDocId } },
                         course: { documentId: { $eq: courseDocId } },
                     },
                 });
@@ -39,18 +61,15 @@ export default factories.createCoreController('api::course.course', ({ strapi })
                 }
             }
 
-            // 3. Strip sensitive lesson fields if unenrolled
+            // 4. Strip sensitive lesson fields if unenrolled
             if (!isEnrolled) {
-                // Handle Strapi v5 (flat format)
                 if (Array.isArray(courseData.lessons)) {
                     courseData.lessons = courseData.lessons.map((lesson: any) => ({
                         ...lesson,
                         videoUrl: null,
                         content: null,
                     }));
-                }
-                // Handle Strapi v4 (nested attributes format)
-                else if (courseData.attributes?.lessons?.data) {
+                } else if (courseData.attributes?.lessons?.data) {
                     courseData.attributes.lessons.data = courseData.attributes.lessons.data.map((lesson: any) => ({
                         ...lesson,
                         attributes: {
@@ -80,27 +99,50 @@ export default factories.createCoreController('api::course.course', ({ strapi })
 
         if (!response || !response.data) return response;
 
-        // Sanitize each course in array
         if (Array.isArray(response.data)) {
+            let fullUser: any = null;
+            let roleName = '';
+            const userDocId = user ? String(user.documentId || user.id) : null;
+
+            if (user && userDocId) {
+                fullUser = await strapi.documents('plugin::users-permissions.user').findOne({
+                    documentId: userDocId,
+                    populate: ['role'],
+                });
+                roleName = fullUser?.role?.name?.toLowerCase() || '';
+            }
+
             for (let i = 0; i < response.data.length; i++) {
                 const courseData = response.data[i];
                 const courseDocId = String(courseData.documentId || courseData.id);
 
-                let isEnrolled = false;
-                if (user) {
-                    // Check role first
-                    const fullUser = await strapi.documents('plugin::users-permissions.user').findOne({
-                        documentId: String(user.documentId || user.id),
-                        populate: ['role'],
-                    });
-                    const roleName = fullUser?.role?.name?.toLowerCase();
-                    if (roleName === 'admin' || roleName === 'content manager') {
-                        continue; // Skip stripping for admins
-                    }
+                // 1. Admin and Content Manager see everything
+                if (roleName === 'admin' || roleName === 'content manager') {
+                    continue;
+                }
 
+                // 2. Instructor sees everything for their own courses
+                if (roleName === 'instructor') {
+                    const courseWithInstructor = await strapi.documents('api::course.course').findOne({
+                        documentId: courseDocId,
+                        populate: ['instructor'],
+                    });
+                    const isOwner =
+                        courseWithInstructor?.instructor?.documentId === user?.documentId ||
+                        courseWithInstructor?.instructor?.id === user?.id;
+
+                    if (isOwner) {
+                        continue;
+                    }
+                }
+
+                // 3. Check Enrollment (Student, or non-owning Instructor)
+                let isEnrolled = false;
+                if (user && userDocId) {
+                    // Strapi 5 FIX: Filter student using documentId
                     const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({
                         filters: {
-                            student: { id: user.id },
+                            student: { documentId: { $eq: userDocId } },
                             course: { documentId: { $eq: courseDocId } },
                         },
                     });

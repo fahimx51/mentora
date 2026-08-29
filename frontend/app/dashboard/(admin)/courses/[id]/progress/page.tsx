@@ -47,9 +47,15 @@ export default function CourseProgressPage() {
             setLoading(true);
             setError('');
 
-            // 1. Fetch Course details & lessons
-            const courseRes = await api.get(`/courses/${courseId}?populate=lessons`);
-            const courseData = courseRes?.data?.data || courseRes?.data;
+            // 1. Fetch Course details & lessons (Published)
+            const isNumeric = /^\d+$/.test(courseId);
+            const courseEndpoint = isNumeric
+                ? `/courses?filters[id][$eq]=${courseId}&populate[0]=lessons`
+                : `/courses/${courseId}?populate[0]=lessons`;
+
+            const courseRes = await api.get(courseEndpoint);
+            const rawCourse = courseRes?.data?.data || courseRes?.data;
+            const courseData = Array.isArray(rawCourse) ? rawCourse[0] : rawCourse;
 
             if (!courseData) {
                 setError('Course not found.');
@@ -58,6 +64,9 @@ export default function CourseProgressPage() {
 
             const courseAttrs = courseData.attributes || courseData;
             const courseLessons = courseAttrs.lessons?.data || courseAttrs.lessons || [];
+
+            const courseDocId = courseData.documentId || courseAttrs.documentId;
+            const courseNumId = courseData.id || courseAttrs.id;
 
             const courseLessonIds = new Set<string>();
             courseLessons.forEach((l: any) => {
@@ -74,21 +83,39 @@ export default function CourseProgressPage() {
                 totalLessons: totalLessonsCount,
             });
 
-            // 2. Fetch Enrollments
+            // 2. Fetch Enrollments (Published)
             const enrolledStudentsMap = new Map<
                 string,
                 { id: string; name: string; email: string }
             >();
 
             try {
-                const enrollmentsRes = await api.get('/enrollments?populate=*');
+                const enrollmentsRes = await api.get(
+                    `/enrollments?populate[0]=student&populate[1]=course&pagination[pageSize]=1000`
+                );
                 const rawEnrollments = enrollmentsRes?.data?.data || enrollmentsRes?.data || [];
 
                 rawEnrollments.forEach((enrollment: any) => {
                     const eAttrs = enrollment.attributes || enrollment;
+                    const courseObj = eAttrs.course?.data || eAttrs.course;
                     const userData = eAttrs.student?.data || eAttrs.student;
 
-                    if (userData) {
+                    // Skip if no student is assigned
+                    if (!userData) return;
+
+                    let matchesCourse = true;
+                    if (courseObj) {
+                        const cDocId = courseObj.documentId || courseObj.attributes?.documentId;
+                        const cNumId = String(courseObj.id || courseObj.attributes?.id || '');
+
+                        matchesCourse =
+                            (courseDocId && cDocId === courseDocId) ||
+                            (courseNumId && cNumId === String(courseNumId)) ||
+                            cDocId === courseId ||
+                            cNumId === courseId;
+                    }
+
+                    if (matchesCourse) {
                         const uAttrs = userData.attributes || userData;
                         const userKey = String(
                             userData.documentId || uAttrs.documentId || userData.id || uAttrs.id
@@ -105,11 +132,11 @@ export default function CourseProgressPage() {
                 console.warn('Could not fetch course enrollments:', eErr);
             }
 
-            // 3. Fetch Lesson Progress records
+            // 3. Fetch Lesson Progress records (Published)
             let progressList: any[] = [];
             try {
                 const progressRes = await api.get(
-                    '/lesson-progresses?populate=*&pagination[pageSize]=1000'
+                    '/lesson-progresses?populate[0]=student&populate[1]=lesson&pagination[pageSize]=1000'
                 );
                 progressList = progressRes?.data?.data || progressRes?.data || [];
             } catch (pErr) {
@@ -145,7 +172,7 @@ export default function CourseProgressPage() {
                 }
             });
 
-            // 4. Map final formatted student progress list
+            // 4. Formatted student progress list
             const formattedStudents: StudentProgress[] = Array.from(
                 enrolledStudentsMap.values()
             ).map((student) => {

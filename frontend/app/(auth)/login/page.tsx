@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import Logo from '@/components/shared/Logo';
@@ -17,6 +17,9 @@ export default function LoginPage() {
         identifier: '',
         password: '',
     });
+
+    const searchParams = useSearchParams();
+    const redirectTo = searchParams.get('redirectTo') || '/dashboard';
 
     const router = useRouter();
     const { setAccessToken, setRefreshToken, setUser } = useAuth();
@@ -41,13 +44,17 @@ export default function LoginPage() {
             // 2. Update React Context state
             setAccessToken(result.jwt);
             setRefreshToken(result.refreshToken);
-            
+
             const fullUserData = await getMeApi();
             setUser(fullUserData);
             // console.log("full user",fullUserData);
 
-            // 3. Redirect home
-            router.push('/');
+            // Redirect 
+            if (redirectTo)
+                router.push(redirectTo);
+            else
+                router.push('/');
+
 
         } catch (err: unknown) {
             console.error('Login failed:', err);

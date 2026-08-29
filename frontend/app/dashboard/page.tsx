@@ -66,7 +66,7 @@ export default function DashboardPage() {
                     { label: "Total Lessons", value: "54", icon: Video, change: "All up to date", color: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50" },
                     { label: "Avg. Completion Rate", value: "88%", icon: Award, change: "+2.1% rating", color: "text-amber-500 bg-amber-50 dark:bg-amber-950/50" },
                 ];
-            case "Content-Manager":
+            case "Content Manager":
                 return [
                     { label: "Manage Courses", value: "48", icon: BookOpen, change: "3 in draft", color: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50" },
                     { label: "Published Quizzes", value: "120", icon: HelpCircle, change: "+15 new", color: "text-amber-500 bg-amber-50 dark:bg-amber-950/50" },
