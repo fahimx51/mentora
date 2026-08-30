@@ -1,23 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
 import Navbar from '@/components/header/Navbar';
-import { Search, Calendar, ArrowRight, BookOpen, Loader2, Sparkles, X } from 'lucide-react';
+import { Search, BookOpen, Loader2, Sparkles, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import BlogCard, { BlogPost } from '@/components/blog/BlogCard';
 
-interface BlogPost {
-    id: string;
-    documentId?: string;
-    title: string;
-    body: string;
-    coverImage?: string;
-    createdAt?: string;
-    author?: {
-        username?: string;
-        name?: string;
-    };
-}
 
 const extractPlainText = (bodyData: any): string => {
     if (!bodyData) return '';
@@ -193,61 +181,11 @@ export default function BlogsPage() {
                     /* Blog Card Grid */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {filteredBlogs.map((blog) => (
-                            <article
+                            <BlogCard
                                 key={blog.id}
-                                className="group flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-1 transition-all duration-300"
-                            >
-                                {/* Cover Image Container */}
-                                <div className="relative h-52 w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
-                                    <img
-                                        src={blog.coverImage}
-                                        alt={blog.title}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                </div>
-
-                                {/* Card Body */}
-                                <div className="flex flex-col flex-1 p-6 justify-between space-y-4">
-                                    <div className="space-y-3">
-                                        {/* Date */}
-                                        <div className="flex items-center gap-2 text-xs font-medium text-slate-400 dark:text-slate-500">
-                                            <Calendar className="w-3.5 h-3.5 text-primary" />
-                                            <span>{blog.createdAt}</span>
-                                        </div>
-
-                                        {/* Title */}
-                                        <h2 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                                            {blog.title}
-                                        </h2>
-
-                                        {/* Excerpt Preview */}
-                                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                                            {extractPlainText(blog.body)}
-                                        </p>
-                                    </div>
-
-                                    {/* Footer / Author & Action */}
-                                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center uppercase">
-                                                {(blog.author?.username || 'A')[0]}
-                                            </div>
-                                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                                @{blog.author?.username || 'Admin'}
-                                            </span>
-                                        </div>
-
-                                        <Link
-                                            href={`/blogs/${blog.id}`}
-                                            className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary-hover group/link"
-                                        >
-                                            <span>Read Post</span>
-                                            <ArrowRight className="w-3.5 h-3.5 group-hover/link:translate-x-1 transition-transform" />
-                                        </Link>
-                                    </div>
-                                </div>
-                            </article>
+                                blog={blog}
+                                plainTextBody={extractPlainText(blog.body)}
+                            />
                         ))}
                     </div>
                 )}
