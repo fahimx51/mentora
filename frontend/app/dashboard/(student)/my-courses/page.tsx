@@ -3,36 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { BookOpen, PlayCircle, Loader2, User as UserIcon, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { BookOpen, PlayCircle, Loader2, User as UserIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/auth-context/AuthContext';
-
-interface LessonProgress {
-    id: number;
-    documentId?: string;
-    isCompleted?: boolean;
-    lesson?: {
-        id?: number;
-        documentId?: string;
-    } | number | string;
-    student?: {
-        id: number;
-        documentId?: string;
-    } | number | string;
-}
-
-interface Lesson {
-    id: number;
-    documentId: string;
-    title?: string;
-    lesson_progresses?: LessonProgress[];
-}
-
-interface Quiz {
-    id: number;
-    documentId: string;
-    title?: string;
-}
 
 interface Instructor {
     id: number;
@@ -45,16 +18,13 @@ interface Course {
     documentId: string;
     title: string;
     description?: string;
-    thumbnail?: string; // String URL for the thumbnail
+    thumbnail?: string;
     instructor?: Instructor;
-    lessons?: Lesson[];
-    quizzes?: Quiz[];
 }
 
 export default function MyCoursesPage() {
     const { user } = useAuth();
     const [courses, setCourses] = useState<Course[]>([]);
-    const [userProgresses, setUserProgresses] = useState<LessonProgress[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string>('');
 
@@ -64,74 +34,31 @@ export default function MyCoursesPage() {
 
             try {
                 setIsLoading(true);
+                setError('');
 
-                // Populate relational fields only (instructor, lessons, quizzes)
-                // Removed 'populate[course][populate][thumbnail]' to prevent Strapi 400 validation error
                 const response = await api.get('/enrollments', {
                     params: {
-                        'populate[course][populate][instructor]': 'true',
-                        'populate[course][populate][lessons]': 'true',
-                        'populate[course][populate][quizzes]': 'true',
+                        'filters[student][id][$eq]': user.id,
+                        'populate[course][populate][instructor]': true,
                     },
                 });
-
-                // Fetch lesson progress for current user to track completed lessons
-                const progressResponse = await api.get('/lesson-progresses', {
-                    params: {
-                        'populate[lesson]': 'true',
-                        'filters[isCompleted][$eq]': 'true',
-                    },
-                });
-
-                const rawProgressList = Array.isArray(progressResponse?.data?.data)
-                    ? progressResponse.data.data
-                    : Array.isArray(progressResponse?.data)
-                        ? progressResponse.data
-                        : [];
-
-                setUserProgresses(rawProgressList);
 
                 const rawList = Array.isArray(response?.data?.data)
                     ? response.data.data
-                    : Array.isArray(response?.data)
-                        ? response.data
-                        : [];
+                    : [];
 
-                // Extract valid course objects directly from user's enrollments
                 const extractedCourses: Course[] = rawList
                     .map((item: any) => {
-                        const courseData = item.course || item.attributes?.course?.data || item.attributes?.course;
+                        const courseData = item.course;
                         if (!courseData) return null;
-
-                        const rawLessons = courseData.lessons || courseData.attributes?.lessons;
-                        const parsedLessons = Array.isArray(rawLessons?.data)
-                            ? rawLessons.data.map((l: any) => l.attributes || l)
-                            : Array.isArray(rawLessons)
-                                ? rawLessons
-                                : [];
-
-                        const rawQuizzes = courseData.quizzes || courseData.attributes?.quizzes;
-                        const parsedQuizzes = Array.isArray(rawQuizzes?.data)
-                            ? rawQuizzes.data.map((q: any) => q.attributes || q)
-                            : Array.isArray(rawQuizzes)
-                                ? rawQuizzes
-                                : [];
-
-                        // Safely parse thumbnail string URL or nested format
-                        const thumbnailVal = courseData.thumbnail || courseData.attributes?.thumbnail;
-                        const parsedThumbnail = typeof thumbnailVal === 'string'
-                            ? thumbnailVal
-                            : thumbnailVal?.url || thumbnailVal?.data?.attributes?.url || null;
 
                         return {
                             id: courseData.id,
-                            documentId: courseData.documentId || courseData.id,
-                            title: courseData.title || courseData.attributes?.title || 'Untitled Course',
-                            description: courseData.description || courseData.attributes?.description,
-                            thumbnail: parsedThumbnail,
-                            instructor: courseData.instructor?.data?.attributes || courseData.instructor || courseData.attributes?.instructor,
-                            lessons: parsedLessons,
-                            quizzes: parsedQuizzes,
+                            documentId: courseData.documentId || String(courseData.id),
+                            title: courseData.title || 'Untitled Course',
+                            description: courseData.description,
+                            thumbnail: courseData.thumbnail || null,
+                            instructor: courseData.instructor,
                         };
                     })
                     .filter((course: Course | null): course is Course => Boolean(course));
@@ -172,7 +99,7 @@ export default function MyCoursesPage() {
                     My Enrolled Courses
                 </h1>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    Track your learning and keep making progress.
+                    Continue where you left off.
                 </p>
             </div>
 
@@ -181,7 +108,7 @@ export default function MyCoursesPage() {
                     <BookOpen className="h-12 w-12 text-slate-400 mb-3" />
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white">No Enrolled Courses</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mt-1 mb-5">
-                        You haven’t enrolled in any courses yet. Start your learning journey today!
+                        You haven&apos;t enrolled in any courses yet. Start your learning journey today!
                     </p>
                     <Link
                         href="/courses"
@@ -193,28 +120,6 @@ export default function MyCoursesPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {courses.map((course) => {
-                        const lessons = course.lessons || [];
-                        const totalLessons = lessons.length;
-                        const totalQuizzes = course.quizzes?.length || 0;
-
-                        // Calculate completed lessons using fetched progress items
-                        const completedLessons = lessons.filter((lesson) => {
-                            return userProgresses.some((prog) => {
-                                const progLessonObj = typeof prog.lesson === 'object' ? prog.lesson : null;
-                                const progLessonId = progLessonObj?.id || (typeof prog.lesson === 'number' ? prog.lesson : null);
-                                const progLessonDocId = progLessonObj?.documentId || (typeof prog.lesson === 'string' ? prog.lesson : null);
-
-                                return (
-                                    (progLessonId && String(progLessonId) === String(lesson.id)) ||
-                                    (progLessonDocId && progLessonDocId === lesson.documentId)
-                                );
-                            });
-                        }).length;
-
-                        const progressPercent = totalLessons > 0
-                            ? Math.round((completedLessons / totalLessons) * 100)
-                            : 0;
-
                         const rawUrl = course.thumbnail;
                         const thumbnailUrl = rawUrl
                             ? rawUrl.startsWith('http')
@@ -239,13 +144,6 @@ export default function MyCoursesPage() {
                                     ) : (
                                         <BookOpen className="h-12 w-12 text-slate-400" />
                                     )}
-
-                                    {progressPercent === 100 && (
-                                        <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500 text-white text-xs font-semibold shadow">
-                                            <CheckCircle2 size={13} />
-                                            <span>Completed</span>
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
@@ -258,47 +156,19 @@ export default function MyCoursesPage() {
                                         </p>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                        <div className="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-400">
-                                            <span>Progress ({completedLessons}/{totalLessons})</span>
-                                            <span>{progressPercent}%</span>
+                                    {course.instructor && (
+                                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                            <UserIcon size={14} className="text-slate-400 shrink-0" />
+                                            <span className="truncate">{course.instructor.username}</span>
                                         </div>
-                                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-green-400 transition-all duration-300 rounded-full"
-                                                style={{ width: `${progressPercent}%` }}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                                        {course.instructor && (
-                                            <div className="flex items-center gap-2">
-                                                <UserIcon size={14} className="text-slate-400 shrink-0" />
-                                                <span className="truncate">{course.instructor.username}</span>
-                                            </div>
-                                        )}
-
-                                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 pt-1">
-                                            <div className="flex items-center gap-1.5">
-                                                <BookOpen size={14} />
-                                                <span>{totalLessons} {totalLessons === 1 ? 'Lesson' : 'Lessons'}</span>
-                                            </div>
-                                            {totalQuizzes > 0 && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <HelpCircle size={14} />
-                                                    <span>{totalQuizzes} {totalQuizzes === 1 ? 'Quiz' : 'Quizzes'}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                    )}
 
                                     <Link
                                         href={`/dashboard/my-courses/${course.documentId || course.id}`}
                                         className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm shadow-md shadow-primary/20 transition-all duration-200"
                                     >
                                         <PlayCircle size={18} />
-                                        <span>{progressPercent > 0 ? 'Continue Learning' : 'Start Learning'}</span>
+                                        <span>Continue Learning</span>
                                     </Link>
                                 </div>
                             </div>

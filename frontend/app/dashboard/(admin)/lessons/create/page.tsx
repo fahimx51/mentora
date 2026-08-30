@@ -133,7 +133,7 @@ export default function CreateLessonPage() {
         <div className="max-w-4xl mx-auto space-y-6 py-6">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
                 <Link
-                    href="/dashboard/my-courses"
+                    href={`${courseId ? `/dashboard/courses/${courseId}` : "/dashboard/courses"}`}
                     className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors font-medium"
                 >
                     <ArrowLeft size={18} /> Back to Courses
