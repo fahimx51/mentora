@@ -73,10 +73,6 @@ export default function CreateCoursePage() {
         try {
             setIsSubmitting(true);
 
-            const token = localStorage.getItem('token') || localStorage.getItem('jwt');
-            const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
-
-            // Determine Target Instructor Document ID
             let targetDocId: string | null = null;
 
             if (canSelectInstructor && selectedInstructor) {
@@ -89,59 +85,19 @@ export default function CreateCoursePage() {
             }
 
             if (!targetDocId) {
-                setError('Could not identify instructor document ID. Please re-login.');
+                setError('Could not identify instructor. Please re-login.');
                 setIsSubmitting(false);
                 return;
             }
 
-            // Strategy 1: Direct documentId string
-            let coursePayload: any = {
+            await api.post('/courses', {
                 data: {
                     title: title.trim(),
                     description: description.trim(),
                     thumbnail: thumbnailUrl.trim(),
                     instructor: targetDocId,
                 },
-            };
-
-            try {
-                await api.post('/courses', coursePayload, { headers: authHeader });
-            } catch (err1: any) {
-                // Strategy 2: Fallback to documentId array format if Strategy 1 fails
-                if (err1.response?.status === 400) {
-                    coursePayload = {
-                        data: {
-                            title: title.trim(),
-                            description: description.trim(),
-                            thumbnail: thumbnailUrl.trim(),
-                            instructor: [targetDocId],
-                        },
-                    };
-
-                    try {
-                        await api.post('/courses', coursePayload, { headers: authHeader });
-                    } catch (err2: any) {
-                        // Strategy 3: Fallback to connect syntax
-                        if (err2.response?.status === 400) {
-                            coursePayload = {
-                                data: {
-                                    title: title.trim(),
-                                    description: description.trim(),
-                                    thumbnail: thumbnailUrl.trim(),
-                                    instructor: {
-                                        connect: [targetDocId],
-                                    },
-                                },
-                            };
-                            await api.post('/courses', coursePayload, { headers: authHeader });
-                        } else {
-                            throw err2;
-                        }
-                    }
-                } else {
-                    throw err1;
-                }
-            }
+            });
 
             setSuccessMsg('Course created successfully!');
             setTimeout(() => {
@@ -152,7 +108,7 @@ export default function CreateCoursePage() {
             const status = err.response?.status;
 
             if (status === 403) {
-                setError('Permission denied (403). Make sure Course "create" permission is enabled for the Instructor role in Strapi Admin Settings.');
+                setError('Permission denied. Make sure Course "create" permission is enabled for your role in Strapi Admin Settings.');
             } else {
                 setError(err.response?.data?.error?.message || 'Failed to create course. Please try again.');
             }
