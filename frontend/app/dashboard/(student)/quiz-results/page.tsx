@@ -38,8 +38,6 @@ export default function QuizResultsPage() {
                         'populate[quiz][fields][0]': 'documentId',
                         'populate[quiz][fields][1]': 'id',
                         'populate[quiz][fields][2]': 'title',
-                        'populate[student][fields][0]': 'id',
-                        'populate[student][fields][1]': 'documentId',
                         'sort[0]': 'createdAt:desc',
                     },
                 });
