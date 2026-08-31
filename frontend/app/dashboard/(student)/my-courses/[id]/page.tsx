@@ -86,12 +86,17 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         try {
             if (!isBackground) setIsLoading(true);
 
-            // Fetch course along with nested lesson progresses, quizzes, and instructor details
-            const response = await api.get(
-                `/courses/${courseId}?populate[lessons][populate][0]=lesson_progresses&populate[quizzes]=true&populate[instructor]=true`
-            );
+            const response = await api.get(`/courses/${courseId}`, {
+                params: {
+                    'populate[instructor]': 'true',
+                    'populate[quizzes]': 'true',
+                    'populate[lessons][populate][lesson_progresses][populate][student][fields][0]': 'id',
+                    'populate[lessons][populate][lesson_progresses][populate][student][fields][1]': 'documentId',
+                },
+            });
 
             const data: CourseDetails = response?.data?.data || response?.data;
+            // console.log("course data => ",data);
             setCourse(data);
 
             const mergedItems: TimelineItem[] = [];
@@ -126,15 +131,6 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         }
     };
 
-    useEffect(() => {
-        fetchCourseDetails();
-    }, [user, courseId]);
-
-    const isLessonCompleted = (lesson: Lesson) => {
-        const progressList = lesson.lesson_progresses || [];
-        return progressList.some((p) => p.isCompleted);
-    };
-
     const handleToggleComplete = async (lesson: Lesson) => {
         if (!lesson || !user || isLessonCompleted(lesson)) return;
 
@@ -150,9 +146,7 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
                     isCompleted: true,
                     student: studentVal,
                     lesson: lessonVal,
-                    publishedAt: new Date().toISOString()
                 },
-                status: 'published'
             };
 
             let res;
@@ -164,51 +158,51 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
             }
 
             const savedProgress = res?.data?.data || res?.data;
+            // console.log('Saved progress:', savedProgress);
 
+            const newProgressObj = {
+                id: savedProgress?.id || Date.now(),
+                documentId: savedProgress?.documentId,
+                isCompleted: true,
+            };
+
+            // 1. Update course state
             setCourse((prevCourse) => {
                 if (!prevCourse || !prevCourse.lessons) return prevCourse;
                 return {
                     ...prevCourse,
                     lessons: prevCourse.lessons.map((l) => {
-                        if (l.id === lesson.id) {
-                            return {
-                                ...l,
-                                lesson_progresses: [
-                                    ...(l.lesson_progresses || []),
-                                    {
-                                        id: savedProgress?.id || Date.now(),
-                                        documentId: savedProgress?.documentId,
-                                        isCompleted: true
-                                    }
-                                ]
-                            };
-                        }
-                        return l;
-                    })
+                        const match = l.documentId
+                            ? l.documentId === lesson.documentId
+                            : l.id === lesson.id;
+                        return match ? { ...l, lesson_progresses: [newProgressObj] } : l;
+                    }),
                 };
             });
 
-            setActiveItem((prev) => {
-                if (prev && prev.type === 'lesson' && prev.data.id === lesson.id) {
-                    return {
-                        ...prev,
-                        data: {
-                            ...prev.data,
-                            lesson_progresses: [
-                                ...(prev.data.lesson_progresses || []),
-                                {
-                                    id: savedProgress?.id || Date.now(),
-                                    documentId: savedProgress?.documentId,
-                                    isCompleted: true
-                                }
-                            ]
+            // 2. Update timeline items state (This updates the lesson list on screen)
+            setTimelineItems((prevItems) =>
+                prevItems.map((item) => {
+                    if (item.type === 'lesson') {
+                        const match = item.data.documentId
+                            ? item.data.documentId === lesson.documentId
+                            : item.data.id === lesson.id;
+                        if (match) {
+                            return {
+                                ...item,
+                                data: {
+                                    ...item.data,
+                                    lesson_progresses: [newProgressObj],
+                                },
+                            };
                         }
-                    };
-                }
-                return prev;
-            });
+                    }
+                    return item;
+                })
+            );
 
-            fetchCourseDetails(true);
+            // 3. Sync with backend
+            await fetchCourseDetails(true);
         } catch (err) {
             console.error('Failed to update lesson progress:', err);
             await fetchCourseDetails(true);
@@ -217,6 +211,15 @@ export default function SingleCoursePage({ params }: { params: Promise<{ id: str
         }
     };
 
+    useEffect(() => {
+        fetchCourseDetails();
+    }, [user, courseId]);
+
+
+    const isLessonCompleted = (lesson: Lesson) => {
+        const progressList = lesson.lesson_progresses || [];
+        return progressList.some((p) => p.isCompleted);
+    };
     // Calculate progress
     const totalLessons = course?.lessons?.length || 0;
     const completedLessonsCount = course?.lessons?.filter(isLessonCompleted).length || 0;

@@ -3,52 +3,105 @@ import { factories } from '@strapi/strapi';
 export default factories.createCoreController('api::course.course', ({ strapi }) => ({
     async findOne(ctx) {
         const user = ctx.state.user;
-        const response = await super.findOne(ctx);
+        const { id } = ctx.params; // Document ID or ID
 
-        if (!response || !response.data) return response;
+        // Fetch course with full nested population for lessons, lesson_progresses, and student
+        const courseData = await strapi.documents('api::course.course').findOne({
+            documentId: id,
+            populate: {
+                instructor: true,
+                quizzes: true,
+                lessons: {
+                    populate: {
+                        lesson_progresses: {
+                            populate: {
+                                student: {
+                                    fields: ['id', 'documentId'],
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
 
-        const sanitizeCourse = async (courseData: any) => {
-            const courseDocId = String(courseData.documentId || courseData.id);
+        if (!courseData) {
+            return ctx.notFound('Course not found');
+        }
 
+        const sanitizeCourse = async (data: any) => {
+            const courseDocId = String(data.documentId || data.id);
+
+            // 1. Filter lesson_progresses to match ONLY current user
+            if (user && Array.isArray(data.lessons)) {
+                const userIdStr = String(user.id);
+                const userDocIdStr = user.documentId ? String(user.documentId) : null;
+
+                data.lessons = data.lessons.map((lesson: any) => {
+                    const currentLessonDocId = String(lesson.documentId || lesson.id);
+
+                    if (Array.isArray(lesson.lesson_progresses)) {
+                        lesson.lesson_progresses = lesson.lesson_progresses.filter((lp: any) => {
+                            // If student field isn't populated, keep it if lp exists (fallback)
+                            if (!lp.student) return true;
+
+                            const studentId = typeof lp.student === 'object' ? lp.student?.id : lp.student;
+                            const studentDocId = typeof lp.student === 'object' ? lp.student?.documentId : lp.student;
+
+                            const isSameStudent =
+                                String(studentId) === userIdStr ||
+                                (userDocIdStr && String(studentDocId) === userDocIdStr) ||
+                                (userDocIdStr && String(studentId) === userDocIdStr);
+
+                            const lpLessonId = typeof lp.lesson === 'object' ? (lp.lesson?.documentId || lp.lesson?.id) : lp.lesson;
+                            const isSameLesson = !lpLessonId || String(lpLessonId) === currentLessonDocId;
+
+                            return isSameStudent && isSameLesson;
+                        });
+                    } else {
+                        lesson.lesson_progresses = [];
+                    }
+                    return lesson;
+                });
+            } else if (Array.isArray(data.lessons)) {
+                // Clear progress if guest
+                data.lessons = data.lessons.map((lesson: any) => ({
+                    ...lesson,
+                    lesson_progresses: [],
+                }));
+            }
+
+            // 2. Check Role (Admin / Instructor)
             if (user) {
                 const userDocId = String(user.documentId || user.id);
-
                 const fullUser = await strapi.documents('plugin::users-permissions.user').findOne({
                     documentId: userDocId,
                     populate: ['role'],
                 });
 
                 const roleName = fullUser?.role?.name?.toLowerCase();
-
-                // 1. Admin and Content Manager see everything, always
                 if (roleName === 'admin' || roleName === 'content manager') {
-                    return courseData;
+                    return data;
                 }
 
-                // 2. Instructor sees everything ONLY for their own course
                 if (roleName === 'instructor') {
                     const courseWithInstructor = await strapi.documents('api::course.course').findOne({
                         documentId: courseDocId,
                         populate: ['instructor'],
                     });
 
-                    // Match via documentId or fallback id
                     const isOwner =
                         courseWithInstructor?.instructor?.documentId === user.documentId ||
                         courseWithInstructor?.instructor?.id === user.id;
 
-                    if (isOwner) {
-                        return courseData;
-                    }
+                    if (isOwner) return data;
                 }
             }
 
-            // 3. Check Enrollment (Student, or non-owning Instructor)
+            // 3. Check Enrollment Status
             let isEnrolled = false;
             if (user) {
                 const userDocId = String(user.documentId || user.id);
-
-                // Strapi 5 FIX: Filter student using documentId instead of numeric id
                 const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({
                     filters: {
                         student: { documentId: { $eq: userDocId } },
@@ -61,36 +114,22 @@ export default factories.createCoreController('api::course.course', ({ strapi })
                 }
             }
 
-            // 4. Strip sensitive lesson fields if unenrolled
             if (!isEnrolled) {
-                if (Array.isArray(courseData.lessons)) {
-                    courseData.lessons = courseData.lessons.map((lesson: any) => ({
+                if (Array.isArray(data.lessons)) {
+                    data.lessons = data.lessons.map((lesson: any) => ({
                         ...lesson,
                         videoUrl: null,
                         content: null,
-                    }));
-                } else if (courseData.attributes?.lessons?.data) {
-                    courseData.attributes.lessons.data = courseData.attributes.lessons.data.map((lesson: any) => ({
-                        ...lesson,
-                        attributes: {
-                            ...lesson.attributes,
-                            videoUrl: null,
-                            content: null,
-                        },
+                        lesson_progresses: [],
                     }));
                 }
             }
 
-            return courseData;
+            return data;
         };
 
-        if (Array.isArray(response.data)) {
-            response.data = await Promise.all(response.data.map(sanitizeCourse));
-        } else {
-            response.data = await sanitizeCourse(response.data);
-        }
-
-        return response;
+        const sanitizedData = await sanitizeCourse(courseData);
+        return { data: sanitizedData };
     },
 
     async find(ctx) {
@@ -100,74 +139,37 @@ export default factories.createCoreController('api::course.course', ({ strapi })
         if (!response || !response.data) return response;
 
         if (Array.isArray(response.data)) {
-            let fullUser: any = null;
-            let roleName = '';
-            const userDocId = user ? String(user.documentId || user.id) : null;
-
-            if (user && userDocId) {
-                fullUser = await strapi.documents('plugin::users-permissions.user').findOne({
-                    documentId: userDocId,
-                    populate: ['role'],
-                });
-                roleName = fullUser?.role?.name?.toLowerCase() || '';
-            }
-
             for (let i = 0; i < response.data.length; i++) {
                 const courseData = response.data[i];
-                const courseDocId = String(courseData.documentId || courseData.id);
+                if (user && Array.isArray(courseData.lessons)) {
+                    const userIdStr = String(user.id);
+                    const userDocIdStr = user.documentId ? String(user.documentId) : null;
 
-                // 1. Admin and Content Manager see everything
-                if (roleName === 'admin' || roleName === 'content manager') {
-                    continue;
-                }
+                    courseData.lessons = courseData.lessons.map((lesson: any) => {
+                        const currentLessonDocId = String(lesson.documentId || lesson.id);
 
-                // 2. Instructor sees everything for their own courses
-                if (roleName === 'instructor') {
-                    const courseWithInstructor = await strapi.documents('api::course.course').findOne({
-                        documentId: courseDocId,
-                        populate: ['instructor'],
+                        if (Array.isArray(lesson.lesson_progresses)) {
+                            lesson.lesson_progresses = lesson.lesson_progresses.filter((lp: any) => {
+                                if (!lp.student) return true;
+
+                                const studentId = typeof lp.student === 'object' ? lp.student?.id : lp.student;
+                                const studentDocId = typeof lp.student === 'object' ? lp.student?.documentId : lp.student;
+
+                                const isSameStudent =
+                                    String(studentId) === userIdStr ||
+                                    (userDocIdStr && String(studentDocId) === userDocIdStr) ||
+                                    (userDocIdStr && String(studentId) === userDocIdStr);
+
+                                const lpLessonId = typeof lp.lesson === 'object' ? (lp.lesson?.documentId || lp.lesson?.id) : lp.lesson;
+                                const isSameLesson = !lpLessonId || String(lpLessonId) === currentLessonDocId;
+
+                                return isSameStudent && isSameLesson;
+                            });
+                        } else {
+                            lesson.lesson_progresses = [];
+                        }
+                        return lesson;
                     });
-                    const isOwner =
-                        courseWithInstructor?.instructor?.documentId === user?.documentId ||
-                        courseWithInstructor?.instructor?.id === user?.id;
-
-                    if (isOwner) {
-                        continue;
-                    }
-                }
-
-                // 3. Check Enrollment (Student, or non-owning Instructor)
-                let isEnrolled = false;
-                if (user && userDocId) {
-                    // Strapi 5 FIX: Filter student using documentId
-                    const enrollments = await strapi.documents('api::enrollment.enrollment').findMany({
-                        filters: {
-                            student: { documentId: { $eq: userDocId } },
-                            course: { documentId: { $eq: courseDocId } },
-                        },
-                    });
-                    if (enrollments && enrollments.length > 0) {
-                        isEnrolled = true;
-                    }
-                }
-
-                if (!isEnrolled) {
-                    if (Array.isArray(courseData.lessons)) {
-                        courseData.lessons = courseData.lessons.map((lesson: any) => ({
-                            ...lesson,
-                            videoUrl: null,
-                            content: null,
-                        }));
-                    } else if (courseData.attributes?.lessons?.data) {
-                        courseData.attributes.lessons.data = courseData.attributes.lessons.data.map((lesson: any) => ({
-                            ...lesson,
-                            attributes: {
-                                ...lesson.attributes,
-                                videoUrl: null,
-                                content: null,
-                            },
-                        }));
-                    }
                 }
             }
         }
